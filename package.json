@@ -1,0 +1,27 @@
+{
+  "name": "botl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Botl: manage the bottles in your wine closets",
+  "type": "module",
+  "engines": {
+    "node": ">=22.9"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web \"node --env-file-if-exists=.env --watch server/index.js\" \"vite\"",
+    "build": "vite build",
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "test": "node --test server/test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.11"
+  }
+}
