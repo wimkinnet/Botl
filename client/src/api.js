@@ -25,7 +25,16 @@ export const api = {
     form.append('photo', body.photo, body.photo.name || 'wine-photo.webp');
     return call('POST', '/bottles', form);
   },
-  updateBottle: (id, body) => call('PATCH', `/bottles/${id}`, body),
+  updateBottle: (id, body) => {
+    if (!body.photo && !body.removePhoto) return call('PATCH', `/bottles/${id}`, body);
+    const form = new FormData();
+    form.append('wine', JSON.stringify(body.wine));
+    form.append('location', JSON.stringify(body.location));
+    form.append('removePhoto', String(!!body.removePhoto));
+    if (body.photo) form.append('photo', body.photo, body.photo.name || 'wine-photo.jpg');
+    return call('PATCH', `/bottles/${id}`, form);
+  },
+  setWineQuantity: (id, quantity, confirmClosetRemoval = false) => call('POST', `/bottles/${id}/quantity`, { quantity, confirmClosetRemoval }),
   moveBottle: (id, slot) => call('POST', `/bottles/${id}/move`, { slot }),
   drinkBottle: (id) => call('POST', `/bottles/${id}/drink`)
 };

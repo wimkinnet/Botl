@@ -176,8 +176,18 @@ router.post('/bottles', upload.single('photo'), ah(async (req, res) => {
   res.status(201).json({ bottles });
 }));
 
-router.patch('/bottles/:id', ah(async (req, res) => {
+router.patch('/bottles/:id', upload.single('photo'), ah(async (req, res) => {
   if (!isId(req.params.id)) throw new HttpError(404, 'Bottle not found');
+  let body = req.body;
+  if (req.is('multipart/form-data')) {
+    try {
+      body = { ...req.body, wine: JSON.parse(req.body.wine || '{}'), location: JSON.parse(req.body.location || '{}') };
+    } catch {
+      throw new HttpError(400, 'Invalid wine or location data');
+    }
+  }
+  const detectedImageType = imageType(req.file);
+  if (req.file && !detectedImageType) throw new HttpError(400, 'The uploaded file is not a supported JPEG, PNG, or WebP image');
   const bottle = await Bottle.findOne({ _id: req.params.id, drunkAt: null });
   if (!bottle) throw new HttpError(404, 'Bottle not found');
   const wineGroupId = bottle.wineGroupId || new mongoose.Types.ObjectId();
@@ -185,11 +195,59 @@ router.patch('/bottles/:id', ah(async (req, res) => {
     ? { wineGroupId, drunkAt: null }
     : { ...wineGroupFilter(bottle.wine.toObject(), bottle.location.toObject()), drunkAt: null };
   const set = { wineGroupId, winePhotoId: bottle.winePhotoId || null };
-  if (req.body.wine) set.wine = cleanWine(req.body.wine);
-  if (req.body.location) set.location = cleanLocation(req.body.location);
+  if (body.wine) set.wine = cleanWine(body.wine);
+  if (body.location) set.location = cleanLocation(body.location);
+  const oldPhotoId = bottle.winePhotoId;
+  if (req.file) set.winePhotoId = (await WinePhoto.create({ contentType: detectedImageType, data: req.file.buffer }))._id;
+  else if (body.removePhoto === 'true' || body.removePhoto === true) set.winePhotoId = null;
   await Bottle.updateMany(groupFilter, { $set: set }, { runValidators: true });
   const bottles = await Bottle.find({ wineGroupId, drunkAt: null }).sort({ createdAt: 1 });
+  if (oldPhotoId && String(oldPhotoId) !== String(set.winePhotoId)) {
+    const stillUsed = await Bottle.exists({ winePhotoId: oldPhotoId });
+    if (!stillUsed) await WinePhoto.deleteOne({ _id: oldPhotoId });
+  }
   res.json({ bottle: bottles.find((item) => item._id.equals(bottle._id)), bottles });
+}));
+
+router.post('/bottles/:id/quantity', ah(async (req, res) => {
+  if (!isId(req.params.id)) throw new HttpError(404, 'Bottle not found');
+  const bottle = await Bottle.findOne({ _id: req.params.id, drunkAt: null });
+  if (!bottle) throw new HttpError(404, 'Bottle not found');
+  const wineGroupId = bottle.wineGroupId || new mongoose.Types.ObjectId();
+  const groupFilter = bottle.wineGroupId
+    ? { wineGroupId, drunkAt: null }
+    : { ...wineGroupFilter(bottle.wine.toObject(), bottle.location.toObject()), drunkAt: null };
+  if (!bottle.wineGroupId) await Bottle.updateMany(groupFilter, { $set: { wineGroupId } });
+  const group = await Bottle.find(groupFilter).sort({ createdAt: 1 });
+  const requested = Number(req.body.quantity);
+  if (!Number.isInteger(requested) || requested < 0 || requested > 500) throw new HttpError(400, 'Bottle total must be a whole number from 0 to 500');
+  const target = requested;
+  const current = group.length;
+  const delta = target - current;
+  if (delta > 0) {
+    const copies = await Bottle.insertMany(Array.from({ length: delta }, () => ({
+      wine: bottle.wine.toObject(),
+      location: bottle.location.toObject(),
+      wineGroupId,
+      winePhotoId: bottle.winePhotoId || null,
+      slot: null
+    })));
+    return res.json({ bottles: [...group, ...copies], added: copies.length, removed: 0, closetRemoved: 0 });
+  }
+  if (delta === 0) return res.json({ bottles: group, added: 0, removed: 0, closetRemoved: 0 });
+
+  const removeCount = -delta;
+  const cellarBottles = group.filter((item) => !item.slot);
+  const closetRemoveCount = Math.max(0, removeCount - cellarBottles.length);
+  if (closetRemoveCount && req.body.confirmClosetRemoval !== true)
+    return res.json({ confirmationRequired: true, cellarAvailable: cellarBottles.length, closetRemoveCount });
+
+  const removed = [...cellarBottles.slice(0, removeCount)];
+  if (closetRemoveCount) removed.push(...group.filter((item) => item.slot).slice(0, closetRemoveCount));
+  const removedIds = removed.map((item) => item._id);
+  await Bottle.updateMany({ _id: { $in: removedIds }, drunkAt: null }, { $set: { drunkAt: new Date(), slot: null } });
+  const bottles = await Bottle.find({ ...groupFilter, drunkAt: null }).sort({ createdAt: 1 });
+  return res.json({ bottles, added: 0, removed: removed.length, closetRemoved: closetRemoveCount });
 }));
 
 // Move a bottle to a slot, or to the Cellar with slot: null. Moving onto a taken slot swaps the two bottles.

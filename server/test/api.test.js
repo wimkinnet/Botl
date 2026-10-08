@@ -135,4 +135,45 @@ test('new wine photo is shared by all bottles in its batch', async () => {
   const photoResponse = await fetch(base + '/photos/' + result.bottles[0].winePhotoId);
   assert.equal(photoResponse.status, 200);
   assert.equal(photoResponse.headers.get('content-type'), 'image/png');
+
+  const replacement = new FormData();
+  replacement.set('wine', JSON.stringify(wine));
+  replacement.set('location', JSON.stringify({ country: 'France', region: 'Bordeaux' }));
+  replacement.set('removePhoto', 'false');
+  replacement.set('photo', new Blob([Buffer.from([0xff, 0xd8, 0xff, 0, 0, 0xff, 0xd9])], { type: 'image/jpeg' }), 'wine.jpg');
+  const replaceResponse = await fetch(base + `/bottles/${result.bottles[0]._id}`, { method: 'PATCH', body: replacement });
+  const replaced = await replaceResponse.json();
+  assert.equal(replaceResponse.status, 200);
+  assert.ok(replaced.bottles.every((bottle) => bottle.winePhotoId === replaced.bottles[0].winePhotoId));
+  assert.notEqual(replaced.bottles[0].winePhotoId, result.bottles[0].winePhotoId);
+
+  const removal = new FormData();
+  removal.set('wine', JSON.stringify(wine));
+  removal.set('location', JSON.stringify({ country: 'France', region: 'Bordeaux' }));
+  removal.set('removePhoto', 'true');
+  const removeResponse = await fetch(base + `/bottles/${result.bottles[0]._id}`, { method: 'PATCH', body: removal });
+  const removedPhoto = await removeResponse.json();
+  assert.equal(removeResponse.status, 200);
+  assert.ok(removedPhoto.bottles.every((bottle) => bottle.winePhotoId == null));
+});
+
+test('wine quantity removes cellar bottles first and confirms closet removals', async () => {
+  const { body: { closet } } = await call('POST', '/closets', { template: 'blank' });
+  const added = await call('POST', '/bottles', { wine, location: { country: 'France', region: 'Bordeaux' }, qty: 2 });
+  const [closetBottle] = added.body.bottles;
+  const groupId = String(closetBottle.wineGroupId);
+  await call('POST', `/bottles/${closetBottle._id}/move`, {
+    slot: { closet: closet._id, shelf: closet.shelves[0]._id, d: 0, r: 0, c: 0 }
+  });
+
+  const pending = await call('POST', `/bottles/${closetBottle._id}/quantity`, { quantity: 0 });
+  assert.equal(pending.body.confirmationRequired, true);
+  assert.equal(pending.body.cellarAvailable, 1);
+  assert.equal(pending.body.closetRemoveCount, 1);
+  assert.equal((await call('GET', '/state')).body.bottles.filter((bottle) => String(bottle.wineGroupId) === groupId).length, 2, 'asking for confirmation must not mutate the cellar');
+
+  const removed = await call('POST', `/bottles/${closetBottle._id}/quantity`, { quantity: 0, confirmClosetRemoval: true });
+  assert.equal(removed.body.removed, 2);
+  assert.equal(removed.body.closetRemoved, 1);
+  assert.equal((await call('GET', '/state')).body.bottles.filter((bottle) => String(bottle.wineGroupId) === groupId).length, 0);
 });

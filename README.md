@@ -65,6 +65,7 @@ client/src/          React app: phone layout (tabs Closet, Bottles, Layout) unde
 | DELETE | `/api/closets/:id` | delete; its bottles go to the Cellar |
 | POST | `/api/bottles` | add `qty` identical bottles to the Cellar, or one bottle into a `slot` |
 | PATCH | `/api/bottles/:id` | edit wine and location |
+| POST | `/api/bottles/:id/quantity` | set a wine group's total bottle count; additions go to the global Cellar and removals consume cellar bottles before confirmed closet removals |
 | GET | `/api/photos/:id` | retrieve an uploaded wine photo |
 | POST | `/api/bottles/:id/move` | to a `slot` (swaps when taken) or to the Cellar with `slot: null` |
 | POST | `/api/bottles/:id/drink` | mark as drunk |

@@ -34,7 +34,7 @@ export default function App() {
   const [loadErr, setLoadErr] = useState('');
   const [activeId, setActiveId] = useState(() => { try { return localStorage.getItem('botl-closet'); } catch { return null; } });
   const [tab, setTab] = useState('closet'); // phone: closet | bottles | layout
-  const [webView, setWebView] = useState('closet'); // web: closet | bottles | map
+  const [webView, setWebView] = useState('closet'); // web: closet | bottles | cellar | map
   const [webEdit, setWebEdit] = useState(false);
   const [sel, setSel] = useState(null); // {kind:'bottle',id} | {kind:'add',key} | {kind:'edit',id}
   const [moving, setMoving] = useState(null); // bottle id for tap-to-move
@@ -231,9 +231,11 @@ export default function App() {
           geo={ref.geo}
           grapes={ref.grapes}
           submitLabel="Save"
+          allowPhoto
+          existingPhotoId={b.winePhotoId}
           onCancel={() => setSel({ kind: 'bottle', id: b._id })}
           onSubmit={async (f) => {
-            const r = await api.updateBottle(b._id, { wine: f.wine, location: f.location });
+            const r = await api.updateBottle(b._id, { wine: f.wine, location: f.location, photo: f.photo, removePhoto: f.removePhoto });
             replaceBottles(r.bottles || [r.bottle]);
             setSel({ kind: 'bottle', id: b._id });
             flash('Saved');
@@ -252,17 +254,20 @@ export default function App() {
         b={b}
         where={bc ? bc.name : 'Cellar'}
         position={position}
+        quantity={sameWineIds.size}
+        cellarQuantity={cellar.filter((item) => sameWineIds.has(item._id)).length}
+        onSetQuantity={async (quantity, confirmClosetRemoval) => {
+          const result = await api.setWineQuantity(b._id, quantity, confirmClosetRemoval);
+          if (result.confirmationRequired) return result;
+          setData((current) => ({ ...current, bottles: [...current.bottles.filter((item) => !sameWineIds.has(item._id)), ...result.bottles] }));
+          if (!result.bottles.some((item) => item._id === b._id)) setSel(result.bottles.length ? { kind: 'bottle', id: result.bottles[0]._id } : null);
+          if (result.added) flash(`Added ${result.added} bottle${result.added === 1 ? '' : 's'} to the global cellar`);
+          else if (result.removed) flash(`Removed ${result.removed} bottle${result.removed === 1 ? '' : 's'}${result.closetRemoved ? `, including ${result.closetRemoved} from closets` : ''}`);
+          return result;
+        }}
         onEdit={() => setSel({ kind: 'edit', id: b._id })}
         onMove={() => { setMoving(b._id); setSel(null); if (phone) setTab('closet'); }}
         onToCellar={() => move(b._id, null)}
-        onDrink={async () => {
-          setSel(null);
-          setData((d) => ({ ...d, bottles: d.bottles.filter((x) => x._id !== b._id) }));
-          try {
-            await api.drinkBottle(b._id);
-            flash(`Enjoy the ${b.wine.producer || b.wine.name}${bc ? '. Slot ' + code(bc, b.slot) + ' is free.' : ''}`);
-          } catch (e) { fail(e); }
-        }}
       />
     );
   }
@@ -282,7 +287,7 @@ export default function App() {
   const cellarStrip = (
     <div className="loose" data-loose="1" role="group" aria-label="Cellar">
       <div className="loose-head">
-        <span>Cellar</span>
+        <span>Global cellar</span>
         <span className="mono">{cellar.length}</span>
         <button className="btn sm" aria-label="Add bottles to the cellar" onClick={() => { setMoving(null); setSel({ kind: 'add', key: null }); }}>+</button>
       </div>
@@ -301,8 +306,8 @@ export default function App() {
       </div>
     </div>
   );
-  const list = () => {
-    const items = bottles
+  const list = (source = bottles) => {
+    const items = source
       .filter((b) => !filter || b.wine.color === filter)
       .map((b) => {
         const bc = b.slot && closetById[b.slot.closet];
@@ -365,13 +370,19 @@ export default function App() {
   if (loadErr && !data) return <div className="loading"><div className="panel" style={{ textAlign: 'center' }}><h3>Botl could not load</h3><p className="err">{loadErr}</p><button className="btn" onClick={load}>Try again</button></div></div>;
   if (!data) return <div className="loading">Loading…</div>;
 
-  if (!closet && !phone && webView === 'map')
+  if (!closet && !phone && (webView === 'map' || webView === 'cellar'))
     return (
       <div className="web">
         <div className="web-body" style={{ gridTemplateColumns: 'minmax(0,1fr) 340px' }}>
           <section className="web-main web-relative">
             <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setWebView('closet')}>Set up a closet</button>
-            <WineMap bottles={bottles} onSelect={(bottle) => setSel({ kind: 'bottle', id: bottle._id })} />
+            {webView === 'map' ? <WineMap bottles={bottles} onSelect={(bottle) => setSel({ kind: 'bottle', id: bottle._id })} /> : (
+              <>
+                <h2 style={{ fontSize: '1.4rem' }}>Global cellar · {cellar.length} bottles</h2>
+                <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setSel({ kind: 'add', key: null })}>+ Add to cellar</button>
+                {list(cellar)}
+              </>
+            )}
           </section>
           <aside className="web-panel">{renderDetail()}</aside>
         </div>
@@ -393,7 +404,21 @@ export default function App() {
           ))}
         </div>
         {!phone && <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setWebView('map')}>View wine map</button>}
-        {cellar.length > 0 && <p className="muted">{cellar.length} bottles are waiting in the cellar.</p>}
+        {cellar.length > 0 && (
+          <section className="empty-cellar">
+            <p className="eyebrow">Global cellar · {cellar.length} bottles</p>
+            <button className="btn" onClick={() => setSel({ kind: 'add', key: null })}>+ Add to cellar</button>
+            <div className="blist">
+              {cellar.map((bottle) => (
+                <button key={bottle._id} className="bitem" onClick={() => setSel({ kind: 'bottle', id: bottle._id })}>
+                  <span className="dot" style={{ width: 16, height: 16, background: COLORS[bottle.wine.color]?.v }} />
+                  <span className="t"><b>{[bottle.wine.producer, bottle.wine.name].filter(Boolean).join(' ')}</b><small>{bottle.wine.vintage} · {bottle.location.appellation || bottle.location.region}</small></span>
+                </button>
+              ))}
+            </div>
+            {sel && <div className="empty-detail">{renderDetail()}</div>}
+          </section>
+        )}
         {toastEl}
       </div>
     );
@@ -461,6 +486,7 @@ export default function App() {
           </div>
           <div>
             <button className="list-link" aria-pressed={webView === 'bottles'} onClick={() => setWebView('bottles')}><b>All bottles</b> <span className="muted">{bottles.length}</span></button>
+            <button className="list-link" aria-pressed={webView === 'cellar'} onClick={() => { setWebView('cellar'); setSel(null); }}><b>Global cellar</b> <span className="muted">{cellar.length}</span></button>
             <button className="list-link" aria-pressed={webView === 'map'} onClick={() => { setWebView('map'); setSel(null); }}><b>Wine map</b></button>
           </div>
           {webView !== 'map' && <div>
@@ -479,6 +505,12 @@ export default function App() {
         <section className="web-main web-relative">
           {webView === 'map' ? (
             <WineMap bottles={bottles} onSelect={(bottle) => setSel({ kind: 'bottle', id: bottle._id })} />
+          ) : webView === 'cellar' ? (
+            <>
+              <h2 style={{ fontSize: '1.4rem' }}>Global cellar · {cellar.length} bottles</h2>
+              <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => { setSel({ kind: 'add', key: null }); }}>+ Add to cellar</button>
+              {list(cellar)}
+            </>
           ) : webView === 'bottles' ? (
             <>
               <h2 style={{ fontSize: '1.4rem' }}>All bottles</h2>
