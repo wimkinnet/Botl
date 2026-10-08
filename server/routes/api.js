@@ -9,17 +9,15 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 3 * 1024 * 1024, files: 1 },
-  fileFilter: (req, file, done) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)
-    ? done(null, true)
-    : done(new HttpError(400, 'Choose a JPEG, PNG, or WebP image'))
+  fileFilter: (req, file, done) => done(null, true)
 });
-const validImage = (file) => {
-  if (!file) return true;
+const imageType = (file) => {
+  if (!file) return null;
   const data = file.buffer;
-  if (file.mimetype === 'image/jpeg') return data[0] === 0xff && data[1] === 0xd8 && data[data.length - 2] === 0xff && data[data.length - 1] === 0xd9;
-  if (file.mimetype === 'image/png') return data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-  if (file.mimetype === 'image/webp') return data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP';
-  return false;
+  if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return 'image/jpeg';
+  if (data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return 'image/png';
+  if (data.length >= 12 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
 };
 const ah = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
@@ -158,7 +156,8 @@ router.post('/bottles', upload.single('photo'), ah(async (req, res) => {
       throw new HttpError(400, 'Invalid wine or location data');
     }
   }
-  if (!validImage(req.file)) throw new HttpError(400, 'The uploaded file is not a valid image');
+  const detectedImageType = imageType(req.file);
+  if (req.file && !detectedImageType) throw new HttpError(400, 'The uploaded file is not a supported JPEG, PNG, or WebP image');
   const wine = cleanWine(body.wine);
   if (!wine.name && !wine.producer) throw new HttpError(400, 'Give the wine a name or a producer');
   const location = cleanLocation(body.location);
@@ -168,7 +167,7 @@ router.post('/bottles', upload.single('photo'), ah(async (req, res) => {
   const groupFilter = wineGroupFilter(wine, location);
   const existing = await Bottle.findOne({ ...groupFilter, drunkAt: null });
   const wineGroupId = existing?.wineGroupId || new mongoose.Types.ObjectId();
-  const photo = req.file && await WinePhoto.create({ contentType: req.file.mimetype, data: req.file.buffer });
+  const photo = req.file && await WinePhoto.create({ contentType: detectedImageType, data: req.file.buffer });
   const winePhotoId = photo?._id || existing?.winePhotoId || null;
   if (existing)
     await Bottle.updateMany({ ...groupFilter, drunkAt: null }, { $set: { wineGroupId, winePhotoId } });

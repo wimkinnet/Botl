@@ -117,7 +117,8 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
       canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
       bitmap.close();
       const blob = await new Promise((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Could not process this image.')), 'image/webp', 0.82));
-      setPhoto(new File([blob], 'wine-photo.webp', { type: 'image/webp' }));
+      const extension = blob.type === 'image/png' ? 'png' : blob.type === 'image/jpeg' ? 'jpg' : 'webp';
+      setPhoto(new File([blob], `wine-photo.${extension}`, { type: blob.type || 'application/octet-stream' }));
       try {
         setOcrStatus('Preparing label reader…');
         const { createWorker } = await import('tesseract.js');
