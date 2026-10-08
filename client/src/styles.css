@@ -139,8 +139,13 @@ button.shelf-label:hover{background:rgba(255,255,255,.2)}
 .lb.dim{opacity:.25}
 .phone .loose{margin:0 10px 6px;border-radius:12px}
 .phone .loose-items{overflow-x:auto;scrollbar-width:none}
-.closet-area{display:flex;gap:14px;align-items:flex-start;justify-content:center}
+.closet-area{display:flex;gap:14px;align-items:flex-start;justify-content:center;min-width:0}
 .closet-area .cabinet{flex:1;min-width:0;margin:0}
+.cabinet-frame{width:100%;min-width:0;display:flex;justify-content:center;overflow-x:auto;padding:8px 8px 12px}
+.cabinet-frame .cabinet{width:var(--cabinet-scale);max-width:min(100%,var(--cabinet-max-width,100%));margin:0 auto}
+.cabinet-size-control{display:flex;align-items:center;gap:8px;align-self:flex-end;color:var(--muted);font-size:.8rem}
+.cabinet-size-control input{width:min(160px,24vw);accent-color:var(--accent)}
+.cabinet-size-control output{font-family:var(--f-mono);min-width:3ch;text-align:right}
 .web .closet-area .loose{width:150px;flex:none;position:sticky;top:12px}
 .web .closet-area .loose-items{flex-wrap:wrap}
 @media (max-width:1100px){ .closet-area{flex-direction:column;align-items:stretch} .web .closet-area .loose{width:auto;position:static} }
@@ -250,7 +255,7 @@ button.shelf-label[aria-pressed="true"]{background:var(--cab-ink);color:var(--ca
 .web-side{border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:18px;background:var(--surface-2)}
 .web-main{padding:18px 22px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .web-panel{border-left:1px solid var(--line);padding:18px;overflow-y:auto;max-height:1100px}
-.web-main .cabinet{max-width:620px;width:100%;margin:0 auto}
+.web-main .cabinet{width:100%;margin:0 auto}
 .web .chips{padding:0}
 .closet-list{display:flex;flex-direction:column;gap:4px}
 .closet-list button{border:0;background:transparent;text-align:left;padding:8px 10px;border-radius:8px;display:flex;flex-direction:column}
@@ -294,6 +299,7 @@ button.shelf-label[aria-pressed="true"]{background:var(--cab-ink);color:var(--ca
 @media (max-width:760px){.wine-map{min-height:220px;max-height:none}.wine-map-count{font-size:.72rem}.wine-map-controls button{width:32px;height:32px}}
 @media (max-width:1100px){ .web-body{grid-template-columns:200px minmax(0,1fr)} .web-panel{grid-column:1/-1;border-left:0;border-top:1px solid var(--line);max-height:none} }
 @media (max-width:760px){ .web-body{grid-template-columns:1fr} .web-side{border-right:0;border-bottom:1px solid var(--line)} }
+@media (max-width:760px){.cabinet-size-control{align-self:stretch}.cabinet-size-control input{flex:1;width:auto;max-width:180px}}
 
 
 /* app shell: the phone layout fills the screen, the web layout uses three columns */

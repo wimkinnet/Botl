@@ -36,6 +36,7 @@ export default function App() {
   const [tab, setTab] = useState('closet'); // phone: closet | bottles | layout
   const [webView, setWebView] = useState('closet'); // web: closet | bottles | cellar | map
   const [webEdit, setWebEdit] = useState(false);
+  const [cabinetScale, setCabinetScale] = useState(100);
   const [sel, setSel] = useState(null); // {kind:'bottle',id} | {kind:'add',key} | {kind:'edit',id}
   const [moving, setMoving] = useState(null); // bottle id for tap-to-move
   const [filter, setFilter] = useState(null);
@@ -331,21 +332,23 @@ export default function App() {
     );
   };
   const cabinet = closet && (
-    <Cabinet
-      closet={closet}
-      bySlot={bySlot}
-      selId={sel?.id}
-      sameWineIds={sameWineIds}
-      filter={filter}
-      moving={moving}
-      editing={editingLayout}
-      curShelf={curShelf}
-      topShelf={topShelf}
-      topRow={topRow}
-      onTopRow={setTopRow}
-      onTopView={onTopView}
-      onSlot={onSlot}
-    />
+    <div className="cabinet-frame" style={{ '--cabinet-scale': `${cabinetScale}%` }}>
+      <Cabinet
+        closet={closet}
+        bySlot={bySlot}
+        selId={sel?.id}
+        sameWineIds={sameWineIds}
+        filter={filter}
+        moving={moving}
+        editing={editingLayout}
+        curShelf={curShelf}
+        topShelf={topShelf}
+        topRow={topRow}
+        onTopRow={setTopRow}
+        onTopView={onTopView}
+        onSlot={onSlot}
+      />
+    </div>
   );
   const editor = closet && (
     <Editor
@@ -364,6 +367,14 @@ export default function App() {
     <div className="banner" style={phone ? undefined : { margin: 0 }}>
       <span>{phone ? 'Tap' : 'Click'} a free slot{(() => { const b = bottles.find((x) => x._id === moving); return b ? ' for ' + (b.wine.producer || b.wine.name) : ''; })()}</span>
       <button className="btn sm" onClick={() => setMoving(null)}>Cancel</button>
+    </div>
+  );
+  const cabinetSizeControl = (
+    <div className="cabinet-size-control">
+      <label htmlFor="cabinet-size">Closet size</label>
+      <input id="cabinet-size" type="range" min="50" max="100" step="5" value={cabinetScale} onChange={(event) => setCabinetScale(Number(event.target.value))} />
+      <output>{cabinetScale}%</output>
+      <button className="btn sm" type="button" onClick={() => setCabinetScale(100)}>Fit screen</button>
     </div>
   );
 
@@ -439,6 +450,7 @@ export default function App() {
           <span className="brand">Botl</span>
         </div>
         {movingBanner}
+        {tab === 'closet' && cabinetSizeControl}
         {tab !== 'layout' && chips}
         <div className="scroll">
           {tab === 'closet' && cabinet}
@@ -530,6 +542,7 @@ export default function App() {
               </div>
               {chips}
               {movingBanner}
+              {cabinetSizeControl}
               <div className="closet-area">{cabinet}{cellarStrip}</div>
             </>
           )}
