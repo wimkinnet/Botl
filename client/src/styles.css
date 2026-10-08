@@ -255,7 +255,7 @@ button.shelf-label[aria-pressed="true"]{background:var(--cab-ink);color:var(--ca
 .web-side{border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:18px;background:var(--surface-2)}
 .web-main{padding:18px 22px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .web-panel{border-left:1px solid var(--line);padding:18px;overflow-y:auto;max-height:1100px}
-.web-main .cabinet{width:100%;margin:0 auto}
+.web-main .cabinet{margin:0 auto}
 .web .chips{padding:0}
 .closet-list{display:flex;flex-direction:column;gap:4px}
 .closet-list button{border:0;background:transparent;text-align:left;padding:8px 10px;border-radius:8px;display:flex;flex-direction:column}
