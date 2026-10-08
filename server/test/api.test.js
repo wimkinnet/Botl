@@ -93,3 +93,28 @@ test('wine data is cleaned', async () => {
   assert.deepEqual(w.grapes, [{ grape: 'Merlot', pct: 100 }]);
   assert.equal((await call('POST', '/bottles', { wine: {} })).status, 400);
 });
+
+test('editing one bottle updates its wine group without moving its copies', async () => {
+  const { body: { closet } } = await call('POST', '/closets', { template: 'blank' });
+  const shelf = closet.shelves[0];
+  const added = await call('POST', '/bottles', { wine, location: { country: 'France', region: 'Bordeaux' }, qty: 3 });
+  const bottles = added.body.bottles;
+  assert.equal(new Set(bottles.map((bottle) => bottle.wineGroupId)).size, 1);
+
+  await call('POST', `/bottles/${bottles[0]._id}/move`, {
+    slot: { closet: closet._id, shelf: shelf._id, d: 0, r: 0, c: 0 }
+  });
+  const editedWine = { ...wine, price: 31 };
+  const edited = await call('PATCH', `/bottles/${bottles[1]._id}`, { wine: editedWine, location: { country: 'France', region: 'Loire' } });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.body.bottles.length, 3);
+  assert.ok(edited.body.bottles.every((bottle) => bottle.wine.price === 31));
+  assert.ok(edited.body.bottles.every((bottle) => bottle.location.region === 'Loire'));
+  assert.deepEqual(edited.body.bottles.find((bottle) => bottle._id === bottles[0]._id).slot, {
+    closet: closet._id,
+    shelf: shelf._id,
+    d: 0,
+    r: 0,
+    c: 0
+  });
+});

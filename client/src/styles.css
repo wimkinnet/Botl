@@ -162,6 +162,7 @@ button.shelf-label[aria-pressed="true"]{background:var(--cab-ink);color:var(--ca
 .drag-src{opacity:.3}
 .drop-over{outline:2.5px solid var(--accent)!important;outline-offset:2px;background-color:rgba(255,255,255,.06)}
 .bottle.dim{opacity:.22}
+.same-wine{outline:2px solid var(--accent)!important;outline-offset:2px;filter:drop-shadow(0 0 3px color-mix(in srgb,var(--accent) 55%,transparent))}
 
 /* editing overlay on cabinet */
 .cabinet.editing .shelf{outline:1px dashed var(--cab-muted);outline-offset:3px;border-radius:6px}

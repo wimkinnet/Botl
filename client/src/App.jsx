@@ -80,6 +80,15 @@ export default function App() {
   }, [bottles, closet]);
   const cellar = useMemo(() => bottles.filter((b) => !b.slot), [bottles]);
   const closetById = useMemo(() => Object.fromEntries(closets.map((c) => [c._id, c])), [closets]);
+  const selectedBottle = sel?.kind === 'bottle' ? bottles.find((b) => b._id === sel.id) : null;
+  const sameWineIds = useMemo(() => {
+    if (!selectedBottle) return new Set();
+    const sameWine = (bottle) => selectedBottle.wineGroupId && bottle.wineGroupId
+      ? String(bottle.wineGroupId) === String(selectedBottle.wineGroupId)
+      : ['producer', 'name', 'vintage', 'color'].every((key) => String(bottle.wine?.[key] || '') === String(selectedBottle.wine?.[key] || ''))
+        && ['country', 'region', 'appellation', 'vineyard'].every((key) => String(bottle.location?.[key] || '') === String(selectedBottle.location?.[key] || ''));
+    return new Set(bottles.filter(sameWine).map((b) => b._id));
+  }, [bottles, selectedBottle]);
 
   const replaceBottles = (list) => setData((d) => ({ ...d, bottles: d.bottles.map((b) => list.find((x) => x._id === b._id) || b) }));
   const fail = (e) => { flash(e.message); load(); };
@@ -224,7 +233,7 @@ export default function App() {
           onCancel={() => setSel({ kind: 'bottle', id: b._id })}
           onSubmit={async (f) => {
             const r = await api.updateBottle(b._id, { wine: f.wine, location: f.location });
-            replaceBottles([r.bottle]);
+            replaceBottles(r.bottles || [r.bottle]);
             setSel({ kind: 'bottle', id: b._id });
             flash('Saved');
           }}
@@ -280,9 +289,9 @@ export default function App() {
         {cellar.map((b) => (
           <button
             key={b._id}
-            className={'lb bottle' + (sel?.id === b._id ? ' sel' : '') + (filter && filter !== b.wine.color ? ' dim' : '')}
+            className={'lb bottle' + (sel?.id === b._id ? ' sel' : sameWineIds.has(b._id) ? ' same-wine' : '') + (filter && filter !== b.wine.color ? ' dim' : '')}
             data-drag={b._id}
-            title={bLabel(b)}
+            title={sameWineIds.has(b._id) && sel?.id !== b._id ? bLabel(b) + ' · same wine as selected bottle' : bLabel(b)}
             aria-label={bLabel(b) + ', in the cellar'}
             onClick={() => (moving ? setMoving(null) : setSel({ kind: 'bottle', id: b._id }))}
           />
@@ -320,6 +329,7 @@ export default function App() {
       closet={closet}
       bySlot={bySlot}
       selId={sel?.id}
+      sameWineIds={sameWineIds}
       filter={filter}
       moving={moving}
       editing={editingLayout}

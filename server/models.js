@@ -62,6 +62,7 @@ const BottleSchema = new Schema(
   {
     wine: { type: WineSchema, default: () => ({}) },
     location: { type: LocationSchema, default: () => ({}) },
+    wineGroupId: { type: Schema.Types.ObjectId, default: null, index: true },
     slot: { type: SlotSchema, default: null },
     drunkAt: { type: Date, default: null }
   },

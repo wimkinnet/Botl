@@ -55,10 +55,11 @@ export default function Cabinet(props) {
   );
 }
 
-function useSlotBits({ closet, bySlot, selId, filter, moving, onSlot }) {
+function useSlotBits({ closet, bySlot, selId, sameWineIds, filter, moving, onSlot }) {
   const cls = (b, base) => {
     const c = [...base];
     if (b && selId === b._id) c.push('sel');
+    else if (b && sameWineIds?.has(b._id)) c.push('same-wine');
     if (b && filter && filter !== b.wine.color) c.push('dim');
     return c.join(' ');
   };

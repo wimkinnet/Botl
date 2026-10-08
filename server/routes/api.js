@@ -31,6 +31,16 @@ function cleanWine(w = {}) {
 function cleanLocation(l = {}) {
   return { country: str(l.country, 60), region: str(l.region, 80), appellation: str(l.appellation, 80), vineyard: str(l.vineyard, 80) };
 }
+const wineGroupFilter = (wine, location) => ({
+  'wine.name': wine.name,
+  'wine.producer': wine.producer,
+  'wine.vintage': wine.vintage,
+  'wine.color': wine.color,
+  'location.country': location.country,
+  'location.region': location.region,
+  'location.appellation': location.appellation,
+  'location.vineyard': location.vineyard
+});
 
 // Checks that a slot exists in its closet's current layout and returns it in stored form.
 async function resolveSlot(slot) {
@@ -123,19 +133,30 @@ router.post('/bottles', ah(async (req, res) => {
   const slot = await resolveSlot(req.body.slot);
   const qty = slot ? 1 : Math.min(48, Math.max(1, Math.round(+req.body.qty || 1)));
   if (slot && (await occupant(slot))) throw new HttpError(409, 'That slot is taken');
+  const groupFilter = wineGroupFilter(wine, location);
+  const existing = await Bottle.findOne({ ...groupFilter, drunkAt: null });
+  const wineGroupId = existing?.wineGroupId || new mongoose.Types.ObjectId();
+  if (existing)
+    await Bottle.updateMany({ ...groupFilter, drunkAt: null }, { $set: { wineGroupId } });
   // one form can create several identical bottles, each with its own place
-  const bottles = await Bottle.insertMany(Array.from({ length: qty }, () => ({ wine, location, slot })));
+  const bottles = await Bottle.insertMany(Array.from({ length: qty }, () => ({ wine, location, wineGroupId, slot })));
   res.status(201).json({ bottles });
 }));
 
 router.patch('/bottles/:id', ah(async (req, res) => {
   if (!isId(req.params.id)) throw new HttpError(404, 'Bottle not found');
-  const set = {};
+  const bottle = await Bottle.findOne({ _id: req.params.id, drunkAt: null });
+  if (!bottle) throw new HttpError(404, 'Bottle not found');
+  const wineGroupId = bottle.wineGroupId || new mongoose.Types.ObjectId();
+  const groupFilter = bottle.wineGroupId
+    ? { wineGroupId, drunkAt: null }
+    : { ...wineGroupFilter(bottle.wine.toObject(), bottle.location.toObject()), drunkAt: null };
+  const set = { wineGroupId };
   if (req.body.wine) set.wine = cleanWine(req.body.wine);
   if (req.body.location) set.location = cleanLocation(req.body.location);
-  const bottle = await Bottle.findOneAndUpdate({ _id: req.params.id, drunkAt: null }, { $set: set }, { new: true, runValidators: true });
-  if (!bottle) throw new HttpError(404, 'Bottle not found');
-  res.json({ bottle });
+  await Bottle.updateMany(groupFilter, { $set: set }, { runValidators: true });
+  const bottles = await Bottle.find({ wineGroupId, drunkAt: null }).sort({ createdAt: 1 });
+  res.json({ bottle: bottles.find((item) => item._id.equals(bottle._id)), bottles });
 }));
 
 // Move a bottle to a slot, or to the Cellar with slot: null. Moving onto a taken slot swaps the two bottles.
