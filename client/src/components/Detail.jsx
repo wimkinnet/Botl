@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { COLORS, grapesText, grapeTotal, regionsFor, appsFor, autofill } from '../wine.js';
 
 const Kv = ({ k, v }) => (
@@ -12,6 +12,7 @@ export function WineDetails({ b }) {
   const w = b.wine, l = b.location;
   return (
     <>
+      {b.winePhotoId && <img className="wine-photo" src={'/api/photos/' + b.winePhotoId} alt={`${w.producer || w.name || 'Wine'} bottle`} />}
       <div className="dgroup">
         <p className="eyebrow">Wine</p>
         <dl className="kv">
@@ -75,8 +76,11 @@ export function BottleDetail({ b, where, position, onDrink, onMove, onToCellar, 
   );
 }
 
-export function WineForm({ title, heading, initial, geo, grapes, showQty, submitLabel, onSubmit, onCancel }) {
+export function WineForm({ title, heading, initial, geo, grapes, showQty, allowPhoto = false, submitLabel, onSubmit, onCancel }) {
   const [f, setF] = useState(initial);
+  const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const setWine = (k, v) => setF((s) => ({ ...s, wine: { ...s.wine, [k]: v } }));
@@ -85,13 +89,43 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, submit
   const tot = grapeTotal(f.wine.grapes);
   const uid = React.useId();
 
+  useEffect(() => {
+    if (!photo) return undefined;
+    const url = URL.createObjectURL(photo);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
+  const choosePhoto = async (file) => {
+    if (!file) { setPhoto(null); setPhotoPreview(''); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return setErr('Choose a JPEG, PNG, or WebP image.');
+    if (file.size > 20 * 1024 * 1024) return setErr('Choose an image smaller than 20 MB.');
+    setPhotoBusy(true);
+    setErr('');
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const blob = await new Promise((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Could not process this image.')), 'image/webp', 0.82));
+      setPhoto(new File([blob], 'wine-photo.webp', { type: 'image/webp' }));
+    } catch {
+      setErr('Could not process this image. Try another photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!f.wine.name.trim() && !f.wine.producer.trim()) return setErr('Give the wine a name or a producer.');
     setBusy(true);
     setErr('');
     try {
-      await onSubmit(f);
+      await onSubmit({ ...f, photo });
     } catch (e2) {
       setErr(e2.message);
       setBusy(false);
@@ -159,6 +193,14 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, submit
           </div>
         </div>
       </fieldset>
+      {allowPhoto && (
+        <div className="wine-photo-picker">
+          <label className="field" htmlFor={uid + 'photo'}>Wine photo</label>
+          <input id={uid + 'photo'} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} />
+          {photoPreview && <img className="wine-photo-preview" src={photoPreview} alt="Selected wine photo preview" />}
+          <small className="muted">JPEG, PNG, or WebP · up to 20 MB before resizing</small>
+        </div>
+      )}
       <fieldset className="fs">
         <legend>Location</legend>
         <div className="form-grid">
@@ -184,7 +226,7 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, submit
       )}
       {err && <p className="err">{err}</p>}
       <div className="row-btns">
-        <button className="btn primary" type="submit" disabled={busy}>
+        <button className="btn primary" type="submit" disabled={busy || photoBusy}>
           {typeof submitLabel === 'function' ? submitLabel(f) : submitLabel}
         </button>
         <button className="btn ghost" type="button" onClick={onCancel}>Cancel</button>

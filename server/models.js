@@ -63,6 +63,7 @@ const BottleSchema = new Schema(
     wine: { type: WineSchema, default: () => ({}) },
     location: { type: LocationSchema, default: () => ({}) },
     wineGroupId: { type: Schema.Types.ObjectId, default: null, index: true },
+    winePhotoId: { type: Schema.Types.ObjectId, default: null },
     slot: { type: SlotSchema, default: null },
     drunkAt: { type: Date, default: null }
   },
@@ -78,3 +79,7 @@ BottleSchema.index({ drunkAt: 1 });
 
 export const Closet = mongoose.model('Closet', ClosetSchema);
 export const Bottle = mongoose.model('Bottle', BottleSchema);
+export const WinePhoto = mongoose.model('WinePhoto', new Schema({
+  contentType: { type: String, enum: ['image/jpeg', 'image/png', 'image/webp'], required: true },
+  data: { type: Buffer, required: true }
+}, { timestamps: true }));

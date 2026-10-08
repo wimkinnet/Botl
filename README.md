@@ -50,7 +50,7 @@ client/src/          React app: phone layout (tabs Closet, Bottles, Layout) unde
 ### Data model
 
 - **Closet**: name, kind, width in bottles (0 = widest shelf), shelves top to bottom. A shelf is `grid`, `stagger` (pyramid: bottom row longest) or `stand`, with rows, slots per row, depth (1 or 2) and alternating (every other bottle neck first).
-- **Bottle**: `wine` (name, producer, vintage, price, colour, drink window, grapes with %), `location` (country, region, appellation, vineyard), and `slot` (closet, shelf, depth, row, column). No slot means the bottle is in the Cellar. Drinking a bottle sets `drunkAt` and keeps it as history.
+- **Bottle**: `wine` (name, producer, vintage, price, colour, drink window, grapes with %), `location` (country, region, appellation, vineyard), optional shared `winePhotoId`, and `slot` (closet, shelf, depth, row, column). No slot means the bottle is in the Cellar. Drinking a bottle sets `drunkAt` and keeps it as history. Uploaded wine photos are stored once in MongoDB and shared by copies in a batch.
 - Slots are never stored; they follow from the shelf settings. A unique index keeps one bottle per slot.
 - A layout change never deletes a bottle: bottles in slots that disappear go to the Cellar.
 
@@ -65,6 +65,7 @@ client/src/          React app: phone layout (tabs Closet, Bottles, Layout) unde
 | DELETE | `/api/closets/:id` | delete; its bottles go to the Cellar |
 | POST | `/api/bottles` | add `qty` identical bottles to the Cellar, or one bottle into a `slot` |
 | PATCH | `/api/bottles/:id` | edit wine and location |
+| GET | `/api/photos/:id` | retrieve an uploaded wine photo |
 | POST | `/api/bottles/:id/move` | to a `slot` (swaps when taken) or to the Cellar with `slot: null` |
 | POST | `/api/bottles/:id/drink` | mark as drunk |
 

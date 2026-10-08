@@ -118,3 +118,21 @@ test('editing one bottle updates its wine group without moving its copies', asyn
     c: 0
   });
 });
+
+test('new wine photo is shared by all bottles in its batch', async () => {
+  const form = new FormData();
+  form.set('wine', JSON.stringify(wine));
+  form.set('location', JSON.stringify({ country: 'France', region: 'Bordeaux' }));
+  form.set('qty', '3');
+  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+  form.set('photo', new Blob([png], { type: 'image/png' }), 'wine.png');
+  const response = await fetch(base + '/bottles', { method: 'POST', body: form });
+  const result = await response.json();
+  assert.equal(response.status, 201);
+  assert.equal(result.bottles.length, 3);
+  assert.equal(new Set(result.bottles.map((bottle) => bottle.winePhotoId)).size, 1);
+
+  const photoResponse = await fetch(base + '/photos/' + result.bottles[0].winePhotoId);
+  assert.equal(photoResponse.status, 200);
+  assert.equal(photoResponse.headers.get('content-type'), 'image/png');
+});

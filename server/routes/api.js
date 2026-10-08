@@ -1,10 +1,26 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { Closet, Bottle, COLORS } from '../models.js';
+import multer from 'multer';
+import { Closet, Bottle, WinePhoto, COLORS } from '../models.js';
 import { cleanShelf, validKeys, slotKey, TEMPLATES, LIMITS } from '../../shared/layout.js';
 import { GEO, GRAPES } from '../data/geo.js';
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, done) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)
+    ? done(null, true)
+    : done(new HttpError(400, 'Choose a JPEG, PNG, or WebP image'))
+});
+const validImage = (file) => {
+  if (!file) return true;
+  const data = file.buffer;
+  if (file.mimetype === 'image/jpeg') return data[0] === 0xff && data[1] === 0xd8 && data[data.length - 2] === 0xff && data[data.length - 1] === 0xd9;
+  if (file.mimetype === 'image/png') return data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  if (file.mimetype === 'image/webp') return data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP';
+  return false;
+};
 const ah = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 class HttpError extends Error {
@@ -79,6 +95,13 @@ router.get('/reference', (req, res) => {
   res.json({ geo: GEO, grapes: GRAPES, templates: Object.fromEntries(Object.entries(TEMPLATES).map(([k, t]) => [k, { name: t.name, kind: t.kind, desc: t.desc }])) });
 });
 
+router.get('/photos/:id', ah(async (req, res) => {
+  if (!isId(req.params.id)) throw new HttpError(404, 'Photo not found');
+  const photo = await WinePhoto.findById(req.params.id);
+  if (!photo) throw new HttpError(404, 'Photo not found');
+  res.type(photo.contentType).set('X-Content-Type-Options', 'nosniff').send(photo.data);
+}));
+
 /* closets */
 router.post('/closets', ah(async (req, res) => {
   const t = TEMPLATES[req.body.template] || TEMPLATES.blank;
@@ -126,20 +149,31 @@ router.delete('/closets/:id', ah(async (req, res) => {
 }));
 
 /* bottles */
-router.post('/bottles', ah(async (req, res) => {
-  const wine = cleanWine(req.body.wine);
+router.post('/bottles', upload.single('photo'), ah(async (req, res) => {
+  let body = req.body;
+  if (req.is('multipart/form-data')) {
+    try {
+      body = { ...req.body, wine: JSON.parse(req.body.wine || '{}'), location: JSON.parse(req.body.location || '{}'), slot: JSON.parse(req.body.slot || 'null') };
+    } catch {
+      throw new HttpError(400, 'Invalid wine or location data');
+    }
+  }
+  if (!validImage(req.file)) throw new HttpError(400, 'The uploaded file is not a valid image');
+  const wine = cleanWine(body.wine);
   if (!wine.name && !wine.producer) throw new HttpError(400, 'Give the wine a name or a producer');
-  const location = cleanLocation(req.body.location);
-  const slot = await resolveSlot(req.body.slot);
-  const qty = slot ? 1 : Math.min(48, Math.max(1, Math.round(+req.body.qty || 1)));
+  const location = cleanLocation(body.location);
+  const slot = await resolveSlot(body.slot);
+  const qty = slot ? 1 : Math.min(48, Math.max(1, Math.round(+body.qty || 1)));
   if (slot && (await occupant(slot))) throw new HttpError(409, 'That slot is taken');
   const groupFilter = wineGroupFilter(wine, location);
   const existing = await Bottle.findOne({ ...groupFilter, drunkAt: null });
   const wineGroupId = existing?.wineGroupId || new mongoose.Types.ObjectId();
+  const photo = req.file && await WinePhoto.create({ contentType: req.file.mimetype, data: req.file.buffer });
+  const winePhotoId = photo?._id || existing?.winePhotoId || null;
   if (existing)
-    await Bottle.updateMany({ ...groupFilter, drunkAt: null }, { $set: { wineGroupId } });
+    await Bottle.updateMany({ ...groupFilter, drunkAt: null }, { $set: { wineGroupId, winePhotoId } });
   // one form can create several identical bottles, each with its own place
-  const bottles = await Bottle.insertMany(Array.from({ length: qty }, () => ({ wine, location, wineGroupId, slot })));
+  const bottles = await Bottle.insertMany(Array.from({ length: qty }, () => ({ wine, location, wineGroupId, winePhotoId, slot })));
   res.status(201).json({ bottles });
 }));
 
@@ -151,7 +185,7 @@ router.patch('/bottles/:id', ah(async (req, res) => {
   const groupFilter = bottle.wineGroupId
     ? { wineGroupId, drunkAt: null }
     : { ...wineGroupFilter(bottle.wine.toObject(), bottle.location.toObject()), drunkAt: null };
-  const set = { wineGroupId };
+  const set = { wineGroupId, winePhotoId: bottle.winePhotoId || null };
   if (req.body.wine) set.wine = cleanWine(req.body.wine);
   if (req.body.location) set.location = cleanLocation(req.body.location);
   await Bottle.updateMany(groupFilter, { $set: set }, { runValidators: true });
@@ -193,6 +227,7 @@ router.post('/bottles/:id/drink', ah(async (req, res) => {
 router.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars
 router.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Photo must be smaller than 3 MB after resizing' : 'Could not read the uploaded photo' });
   if (err.code === 11000) return res.status(409).json({ error: 'That slot is taken' });
   if (err.status) return res.status(err.status).json({ error: err.message });
   if (err.name === 'ValidationError' || err.type === 'entity.parse.failed') return res.status(400).json({ error: err.message });

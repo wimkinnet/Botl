@@ -206,11 +206,12 @@ export default function App() {
           geo={ref.geo}
           grapes={ref.grapes}
           showQty={inCellar}
+          allowPhoto
           submitLabel={(f) => (inCellar ? `Add ${f.qty} to cellar` : 'Put in slot')}
           onCancel={close}
           onSubmit={async (f) => {
             const slot = inCellar ? null : { closet: closet._id, ...parseKey(sel.key) };
-            const r = await api.addBottles({ wine: f.wine, location: f.location, qty: f.qty, slot });
+            const r = await api.addBottles({ wine: f.wine, location: f.location, qty: f.qty, slot, photo: f.photo });
             setData((d) => ({ ...d, bottles: [...d.bottles, ...r.bottles] }));
             flash(inCellar ? `Added ${r.bottles.length} ${r.bottles.length === 1 ? 'bottle' : 'bottles'} to the cellar` : 'Placed in ' + code(closet, slot));
             setSel(inCellar ? null : { kind: 'bottle', id: r.bottles[0]._id });
