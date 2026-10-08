@@ -100,7 +100,9 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
 
   const choosePhoto = async (file) => {
     if (!file) { setPhoto(null); setPhotoPreview(''); setLabelLines([]); setOcrStatus(''); return; }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return setErr('Choose a JPEG, PNG, or WebP image.');
+    const jpegName = /\.jpe?g$/i.test(file.name);
+    const supportedType = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type);
+    if (!supportedType && !jpegName) return setErr('Choose a JPEG, PNG, or WebP image.');
     if (file.size > 20 * 1024 * 1024) return setErr('Choose an image smaller than 20 MB.');
     setPhotoBusy(true);
     setErr('');
@@ -245,7 +247,7 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
       {allowPhoto && (
         <div className="wine-photo-picker">
           <label className="field" htmlFor={uid + 'photo'}>Wine photo</label>
-          <input id={uid + 'photo'} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} />
+          <input id={uid + 'photo'} type="file" accept=".jpg,.jpeg,image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} />
           {photoPreview && <img className="wine-photo-preview" src={photoPreview} alt="Selected wine photo preview" />}
           {ocrStatus && <small className="muted" role="status">{ocrStatus}</small>}
           {!!labelLines.length && (
