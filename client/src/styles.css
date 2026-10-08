@@ -142,7 +142,7 @@ button.shelf-label:hover{background:rgba(255,255,255,.2)}
 .closet-area{display:flex;gap:14px;align-items:flex-start;justify-content:center;min-width:0}
 .closet-area .cabinet{flex:1;min-width:0;margin:0}
 .cabinet-frame{width:100%;min-width:0;display:flex;justify-content:center;overflow-x:auto;padding:8px 8px 12px}
-.cabinet-frame .cabinet{width:var(--cabinet-scale);max-width:min(100%,var(--cabinet-max-width,100%));margin:0 auto}
+.cabinet-frame .cabinet{flex:0 0 auto;width:var(--cabinet-scale);max-width:min(100%,var(--cabinet-max-width,100%));margin:0 auto}
 .cabinet-size-control{display:flex;align-items:center;gap:8px;align-self:flex-end;color:var(--muted);font-size:.8rem}
 .cabinet-size-control input{width:min(160px,24vw);accent-color:var(--accent)}
 .cabinet-size-control output{font-family:var(--f-mono);min-width:3ch;text-align:right}
