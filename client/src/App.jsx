@@ -6,6 +6,7 @@ import { useDragDrop } from './useDragDrop.js';
 import Cabinet from './components/Cabinet.jsx';
 import Editor from './components/Editor.jsx';
 import { BottleDetail, WineForm } from './components/Detail.jsx';
+import WineMap from './components/WineMap.jsx';
 
 const keyOf = (slot) => slotKey(String(slot.shelf), slot.d, slot.r, slot.c);
 const newId = () => Math.floor(Date.now() / 1000).toString(16).padStart(8, '0') + Array.from({ length: 16 }, () => ((Math.random() * 16) | 0).toString(16)).join('');
@@ -33,7 +34,7 @@ export default function App() {
   const [loadErr, setLoadErr] = useState('');
   const [activeId, setActiveId] = useState(() => { try { return localStorage.getItem('botl-closet'); } catch { return null; } });
   const [tab, setTab] = useState('closet'); // phone: closet | bottles | layout
-  const [webView, setWebView] = useState('closet'); // web: closet | bottles
+  const [webView, setWebView] = useState('closet'); // web: closet | bottles | map
   const [webEdit, setWebEdit] = useState(false);
   const [sel, setSel] = useState(null); // {kind:'bottle',id} | {kind:'add',key} | {kind:'edit',id}
   const [moving, setMoving] = useState(null); // bottle id for tap-to-move
@@ -353,6 +354,20 @@ export default function App() {
   if (loadErr && !data) return <div className="loading"><div className="panel" style={{ textAlign: 'center' }}><h3>Botl could not load</h3><p className="err">{loadErr}</p><button className="btn" onClick={load}>Try again</button></div></div>;
   if (!data) return <div className="loading">Loading…</div>;
 
+  if (!closet && !phone && webView === 'map')
+    return (
+      <div className="web">
+        <div className="web-body" style={{ gridTemplateColumns: 'minmax(0,1fr) 340px' }}>
+          <section className="web-main web-relative">
+            <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setWebView('closet')}>Set up a closet</button>
+            <WineMap bottles={bottles} onSelect={(bottle) => setSel({ kind: 'bottle', id: bottle._id })} />
+          </section>
+          <aside className="web-panel">{renderDetail()}</aside>
+        </div>
+        {toastEl}
+      </div>
+    );
+
   if (!closet)
     return (
       <div className="empty-state">
@@ -366,6 +381,7 @@ export default function App() {
             </button>
           ))}
         </div>
+        {!phone && <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setWebView('map')}>View wine map</button>}
         {cellar.length > 0 && <p className="muted">{cellar.length} bottles are waiting in the cellar.</p>}
         {toastEl}
       </div>
@@ -432,22 +448,27 @@ export default function App() {
               <button style={{ color: 'var(--accent)' }} onClick={() => { setWebView('closet'); setWebEdit(true); setSel(null); }}><b>+ New closet</b></button>
             </div>
           </div>
-          <button className="list-link" aria-pressed={webView === 'bottles'} onClick={() => setWebView('bottles')}><b>All bottles</b> <span className="muted">{bottles.length}</span></button>
           <div>
+            <button className="list-link" aria-pressed={webView === 'bottles'} onClick={() => setWebView('bottles')}><b>All bottles</b> <span className="muted">{bottles.length}</span></button>
+            <button className="list-link" aria-pressed={webView === 'map'} onClick={() => { setWebView('map'); setSel(null); }}><b>Wine map</b></button>
+          </div>
+          {webView !== 'map' && <div>
             <p className="eyebrow">In this closet</p>
             <div className="stat">{usedHere}<span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}> / {capHere}</span></div>
-          </div>
-          <div>
+          </div>}
+          {webView !== 'map' && <div>
             <p className="eyebrow" style={{ marginBottom: 6 }}>Legend</p>
             <div className="legend">
               <div><span className="bottle" style={{ width: 16, height: 16, borderRadius: '50%', display: 'inline-block' }} />Base facing you</div>
               <div><span className="bottle neck" style={{ width: 16, height: 16, borderRadius: '50%', display: 'inline-block' }} />Neck facing you</div>
               <div><span className="dot" style={{ border: '1.5px dashed var(--muted)', background: 'transparent' }} />Free slot</div>
             </div>
-          </div>
+          </div>}
         </aside>
         <section className="web-main web-relative">
-          {webView === 'bottles' ? (
+          {webView === 'map' ? (
+            <WineMap bottles={bottles} onSelect={(bottle) => setSel({ kind: 'bottle', id: bottle._id })} />
+          ) : webView === 'bottles' ? (
             <>
               <h2 style={{ fontSize: '1.4rem' }}>All bottles</h2>
               {chips}
