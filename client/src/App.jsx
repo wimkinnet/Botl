@@ -37,6 +37,7 @@ export default function App() {
   const [webView, setWebView] = useState('closet'); // web: closet | bottles | cellar | map
   const [webEdit, setWebEdit] = useState(false);
   const [cabinetScale, setCabinetScale] = useState(100);
+  const cabinetFrameRef = useRef(null);
   const [sel, setSel] = useState(null); // {kind:'bottle',id} | {kind:'add',key} | {kind:'edit',id}
   const [moving, setMoving] = useState(null); // bottle id for tap-to-move
   const [filter, setFilter] = useState(null);
@@ -332,7 +333,7 @@ export default function App() {
     );
   };
   const cabinet = closet && (
-    <div className="cabinet-frame" style={{ '--cabinet-scale': `${cabinetScale}%` }}>
+    <div ref={cabinetFrameRef} className="cabinet-frame" style={{ '--cabinet-scale': `${cabinetScale}%` }}>
       <Cabinet
         closet={closet}
         bySlot={bySlot}
@@ -372,9 +373,20 @@ export default function App() {
   const cabinetSizeControl = (
     <div className="cabinet-size-control">
       <label htmlFor="cabinet-size">Closet size</label>
-      <input id="cabinet-size" type="range" min="50" max="100" step="5" value={cabinetScale} onChange={(event) => setCabinetScale(Number(event.target.value))} />
+      <input id="cabinet-size" type="range" min="10" max="100" step="2" value={cabinetScale} onChange={(event) => setCabinetScale(Number(event.target.value))} />
       <output>{cabinetScale}%</output>
-      <button className="btn sm" type="button" onClick={() => setCabinetScale(100)}>Fit screen</button>
+      <button className="btn sm" type="button" onClick={() => {
+        const frame = cabinetFrameRef.current;
+        const cabinetElement = frame?.querySelector('.cabinet');
+        if (!frame || !cabinetElement) return;
+        const frameRect = frame.getBoundingClientRect();
+        const cabinetRect = cabinetElement.getBoundingClientRect();
+        const scroll = frame.closest('.scroll');
+        const availableHeight = (scroll ? scroll.getBoundingClientRect().bottom : window.innerHeight) - frameRect.top - 16;
+        const availableWidth = frameRect.width - 16;
+        const fitRatio = Math.min(availableWidth / cabinetRect.width, availableHeight / cabinetRect.height);
+        setCabinetScale((scale) => Math.max(10, Math.min(100, Math.floor(scale * fitRatio))));
+      }}>Fit screen</button>
     </div>
   );
 
