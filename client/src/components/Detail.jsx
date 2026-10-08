@@ -81,6 +81,8 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState('');
+  const [labelLines, setLabelLines] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const setWine = (k, v) => setF((s) => ({ ...s, wine: { ...s.wine, [k]: v } }));
@@ -97,11 +99,13 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
   }, [photo]);
 
   const choosePhoto = async (file) => {
-    if (!file) { setPhoto(null); setPhotoPreview(''); return; }
+    if (!file) { setPhoto(null); setPhotoPreview(''); setLabelLines([]); setOcrStatus(''); return; }
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return setErr('Choose a JPEG, PNG, or WebP image.');
     if (file.size > 20 * 1024 * 1024) return setErr('Choose an image smaller than 20 MB.');
     setPhotoBusy(true);
     setErr('');
+    setLabelLines([]);
+    setOcrStatus('Preparing label reader…');
     try {
       const bitmap = await createImageBitmap(file);
       const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
@@ -112,11 +116,56 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
       bitmap.close();
       const blob = await new Promise((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Could not process this image.')), 'image/webp', 0.82));
       setPhoto(new File([blob], 'wine-photo.webp', { type: 'image/webp' }));
+      try {
+        setOcrStatus('Preparing label reader…');
+        const { createWorker } = await import('tesseract.js');
+        const worker = await createWorker('eng', 1, { logger: ({ status, progress }) => {
+          setOcrStatus(status === 'recognizing text' ? `Reading label ${Math.round(progress * 100)}%…` : 'Preparing label reader…');
+        } });
+        let recognizedText;
+        try {
+          ({ data: { text: recognizedText } } = await worker.recognize(blob));
+        } finally {
+          await worker.terminate();
+        }
+        const lines = [...new Set(recognizedText.split(/\r?\n/).map((line) => line.replace(/[^\p{L}\p{N}'’-]+/gu, ' ').trim()).filter((line) => line.length >= 3 && !/^\d+$/.test(line)))];
+        setLabelLines(lines.slice(0, 8));
+        const vintage = recognizedText.match(/\b(?:19|20)\d{2}\b/)?.[0];
+        const normalizedText = ' ' + recognizedText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+        setF((current) => {
+          const next = { ...current, wine: { ...current.wine }, location: { ...current.location } };
+          if (vintage && (!next.wine.vintage || next.wine.vintage === 'NV')) next.wine.vintage = vintage;
+          for (const [country, regions] of Object.entries(geo)) {
+            for (const [region, appellations] of Object.entries(regions)) {
+              const match = appellations.find((appellation) => {
+                const phrase = ' ' + appellation.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+                return normalizedText.includes(phrase);
+              });
+              if (match) {
+                if (!next.location.country) next.location.country = country;
+                if (!next.location.region) next.location.region = region;
+                if (!next.location.appellation) next.location.appellation = match;
+                return next;
+              }
+            }
+          }
+          return next;
+        });
+        setOcrStatus(lines.length || vintage ? 'Review the label suggestions below.' : 'No clear label text found. You can fill the fields manually.');
+      } catch {
+        setOcrStatus('Photo added. Label reading is unavailable right now; fill the fields manually.');
+      }
     } catch {
       setErr('Could not process this image. Try another photo.');
+      setOcrStatus('Could not read the label. You can fill the fields manually.');
     } finally {
       setPhotoBusy(false);
     }
+  };
+
+  const applyLabelLine = (field, value) => {
+    setWine(field, value);
+    setLabelLines((lines) => lines.filter((line) => line !== value));
   };
 
   const submit = async (e) => {
@@ -198,6 +247,19 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
           <label className="field" htmlFor={uid + 'photo'}>Wine photo</label>
           <input id={uid + 'photo'} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} />
           {photoPreview && <img className="wine-photo-preview" src={photoPreview} alt="Selected wine photo preview" />}
+          {ocrStatus && <small className="muted" role="status">{ocrStatus}</small>}
+          {!!labelLines.length && (
+            <div className="label-suggestions">
+              <span className="eyebrow">Recognized label text</span>
+              {labelLines.map((line) => (
+                <div key={line}>
+                  <span>{line}</span>
+                  <button type="button" className="btn sm" onClick={() => applyLabelLine('producer', line)}>Producer</button>
+                  <button type="button" className="btn sm" onClick={() => applyLabelLine('name', line)}>Wine name</button>
+                </div>
+              ))}
+            </div>
+          )}
           <small className="muted">JPEG, PNG, or WebP · up to 20 MB before resizing</small>
         </div>
       )}
