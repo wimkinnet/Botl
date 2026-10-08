@@ -162,7 +162,12 @@ export default function WineMap({ bottles, onSelect }) {
               const name = canonicalCountry(country.properties.name);
               return <path key={country.properties.name} d={path(country)} className={'wine-map-country' + (countryCounts.has(name) ? ' has-wine' : '')} />;
             })}
-            {points.map(({ wines: nearbyWines, x, y }) => {
+          </g>
+          {points.map(({ wines: nearbyWines, x, y }) => {
+              const markerX = width / 2 + pan.x + zoom * (x - width / 2);
+              const markerY = height / 2 + pan.y + zoom * (y - height / 2);
+              const dotRadius = Math.min(8, 5.5 + (zoom - 1) * 0.35);
+              const clusterRadius = Math.min(11, 8.5 + (zoom - 1) * 0.35);
               const first = nearbyWines[0];
               const labels = nearbyWines.map(({ bottle }) => bLabel(bottle)).filter(Boolean);
               const locations = nearbyWines.map(({ bottle }) => [bottle.location?.appellation, bottle.location?.region, bottle.location?.country].filter(Boolean).join(', '));
@@ -184,13 +189,12 @@ export default function WineMap({ bottles, onSelect }) {
                   onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); } }}
                 >
                   <title>{title}</title>
-                  <circle cx={x} cy={y} r={clustered ? 12 : 9} className="wine-map-hit" />
-                  <circle cx={x} cy={y} r={clustered ? 9 : 5.5} fill={COLORS[first.bottle.wine?.color]?.v || 'var(--accent)'} className="wine-map-dot" />
-                  {clustered && <text x={x} y={y} className="wine-map-cluster-count">{nearbyWines.length}</text>}
+                  <circle cx={markerX} cy={markerY} r={Math.max(10, dotRadius + 4)} className="wine-map-hit" />
+                  <circle cx={markerX} cy={markerY} r={clustered ? clusterRadius : dotRadius} fill={COLORS[first.bottle.wine?.color]?.v || 'var(--accent)'} className="wine-map-dot" />
+                  {clustered && <text x={markerX} y={markerY} fontSize={8 + (zoom - 1) * 0.2} className="wine-map-cluster-count">{nearbyWines.length}</text>}
                 </g>
               );
             })}
-          </g>
         </svg>
         <div className="wine-map-controls" role="group" aria-label="Map zoom controls">
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => changeZoom(1.35)}>+</button>

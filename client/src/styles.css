@@ -260,7 +260,7 @@ button.shelf-label[aria-pressed="true"]{background:var(--cab-ink);color:var(--ca
 .wine-map-marker{cursor:pointer;outline:none}
 .wine-map-hit{fill:transparent}
 .wine-map-dot{stroke:var(--surface);stroke-width:2;vector-effect:non-scaling-stroke;transition:r .12s ease}
-.wine-map-marker:hover .wine-map-dot,.wine-map-marker:focus .wine-map-dot{r:7;stroke:var(--ink);stroke-width:2.5}
+.wine-map-marker:hover .wine-map-dot,.wine-map-marker:focus .wine-map-dot{stroke:var(--ink);stroke-width:2.5}
 .wine-map-marker.clustered .wine-map-dot{stroke-width:1.5}
 .wine-map-cluster-count{font-family:var(--f-mono);font-size:8px;font-weight:700;text-anchor:middle;dominant-baseline:central;fill:var(--surface);pointer-events:none}
 .wine-map-controls{position:absolute;right:10px;bottom:10px;display:flex;gap:5px}
