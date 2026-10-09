@@ -70,6 +70,7 @@ export default function App() {
   const closets = data?.closets || [];
   const bottles = data?.bottles || [];
   const closet = closets.find((c) => c._id === activeId) || closets[0] || null;
+  const cabinetLayout = closet ? `${closet.width || 0}:${closet.shelves.map((shelf) => [shelf.type, shelf.rows, shelf.cols, shelf.depth, shelf.alt].join(':')).join('|')}` : '';
   useEffect(() => {
     if (closet && closet._id !== activeId) setActiveId(closet._id);
     if (closet) try { localStorage.setItem('botl-closet', closet._id); } catch { /* private mode */ }
@@ -395,7 +396,7 @@ export default function App() {
       cancelAnimationFrame(resizeFrame);
       window.removeEventListener('resize', fit);
     };
-  }, [closet?._id, fitCabinet, phone, tab, webView]);
+  }, [cabinetLayout, closet?._id, fitCabinet, phone, tab, webView]);
   const cabinetSizeControl = (
     <div className="cabinet-size-control">
       <label htmlFor="cabinet-size">Closet size</label>
