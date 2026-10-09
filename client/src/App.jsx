@@ -70,7 +70,6 @@ export default function App() {
   const closets = data?.closets || [];
   const bottles = data?.bottles || [];
   const closet = closets.find((c) => c._id === activeId) || closets[0] || null;
-  const cabinetLayout = closet ? `${closet.width || 0}:${closet.shelves.map((shelf) => [shelf.type, shelf.rows, shelf.cols, shelf.depth, shelf.alt].join(':')).join('|')}` : '';
   useEffect(() => {
     if (closet && closet._id !== activeId) setActiveId(closet._id);
     if (closet) try { localStorage.setItem('botl-closet', closet._id); } catch { /* private mode */ }
@@ -381,26 +380,12 @@ export default function App() {
     const availableHeight = (scroll ? scroll.getBoundingClientRect().bottom : window.innerHeight) - frameRect.top - 16;
     const availableWidth = frameRect.width - 16;
     const fitRatio = Math.min(availableWidth / cabinetRect.width, availableHeight / cabinetRect.height);
-    setCabinetScale((scale) => Math.max(10, Math.min(300, Math.floor(scale * fitRatio))));
+    setCabinetScale((scale) => Math.max(10, Math.min(100, Math.floor(scale * fitRatio))));
   }, []);
-  useEffect(() => {
-    if (!closet) return undefined;
-    let resizeFrame;
-    const fit = () => {
-      cancelAnimationFrame(resizeFrame);
-      resizeFrame = requestAnimationFrame(fitCabinet);
-    };
-    fit();
-    window.addEventListener('resize', fit);
-    return () => {
-      cancelAnimationFrame(resizeFrame);
-      window.removeEventListener('resize', fit);
-    };
-  }, [cabinetLayout, closet?._id, fitCabinet, phone, tab, webView]);
   const cabinetSizeControl = (
     <div className="cabinet-size-control">
       <label htmlFor="cabinet-size">Closet size</label>
-      <input id="cabinet-size" type="range" min="10" max="300" step="2" value={cabinetScale} onChange={(event) => setCabinetScale(Number(event.target.value))} />
+      <input id="cabinet-size" type="range" min="10" max="100" step="2" value={cabinetScale} onChange={(event) => setCabinetScale(Number(event.target.value))} />
       <output>{cabinetScale}%</output>
       <button className="btn sm" type="button" onClick={fitCabinet}>Fit screen</button>
     </div>
@@ -529,6 +514,10 @@ export default function App() {
             <button className="list-link" aria-pressed={webView === 'cellar'} onClick={() => { setWebView('cellar'); setSel(null); }}><b>Global cellar</b> <span className="muted">{cellar.length}</span></button>
             <button className="list-link" aria-pressed={webView === 'map'} onClick={() => { setWebView('map'); setSel(null); }}><b>Wine map</b></button>
           </div>
+          {webView === 'closet' && <div className="web-wine-filters">
+            <p className="eyebrow" style={{ marginBottom: 6 }}>Highlight wines</p>
+            {chips}
+          </div>}
           {webView !== 'map' && <div>
             <p className="eyebrow">In this closet</p>
             <div className="stat">{usedHere}<span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}> / {capHere}</span></div>
@@ -568,7 +557,6 @@ export default function App() {
                   <button className={'btn' + (webEdit ? ' primary' : '')} onClick={() => { setWebEdit((v) => !v); setSel(null); }}>{webEdit ? 'Done editing' : 'Edit layout'}</button>
                 </div>
               </div>
-              {chips}
               {movingBanner}
               {cabinetSizeControl}
               <div className="closet-area">{cabinet}{cellarStrip}</div>
