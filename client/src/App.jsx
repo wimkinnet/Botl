@@ -375,12 +375,24 @@ export default function App() {
     const cabinetElement = frame?.querySelector('.cabinet');
     if (!frame || !cabinetElement) return;
     const frameRect = frame.getBoundingClientRect();
-    const cabinetRect = cabinetElement.getBoundingClientRect();
     const scroll = frame.closest('.scroll');
     const availableHeight = (scroll ? scroll.getBoundingClientRect().bottom : window.innerHeight) - frameRect.top - 16;
     const availableWidth = frameRect.width - 16;
-    const fitRatio = Math.min(availableWidth / cabinetRect.width, availableHeight / cabinetRect.height);
-    setCabinetScale((scale) => Math.max(10, Math.min(100, Math.floor(scale * fitRatio))));
+    let low = 5;
+    let high = 50;
+    let best = 5;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      frame.style.setProperty('--cabinet-scale', `${middle * 2}%`);
+      const cabinetRect = cabinetElement.getBoundingClientRect();
+      if (cabinetRect.width <= availableWidth && cabinetRect.height <= availableHeight) {
+        best = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+    setCabinetScale(best * 2);
   }, []);
   const cabinetSizeControl = (
     <div className="cabinet-size-control">
