@@ -518,6 +518,7 @@ export default function App() {
             <p className="eyebrow" style={{ marginBottom: 6 }}>Highlight wines</p>
             {chips}
           </div>}
+          {webView === 'closet' && cabinetSizeControl}
           {webView !== 'map' && <div>
             <p className="eyebrow">In this closet</p>
             <div className="stat">{usedHere}<span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}> / {capHere}</span></div>
@@ -558,7 +559,6 @@ export default function App() {
                 </div>
               </div>
               {movingBanner}
-              {cabinetSizeControl}
               <div className="closet-area">{cabinet}{cellarStrip}</div>
             </>
           )}
