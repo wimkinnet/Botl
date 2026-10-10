@@ -113,7 +113,16 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const setWine = (k, v) => setF((s) => ({ ...s, wine: { ...s.wine, [k]: v } }));
-  const setLoc = (k, v) => setF((s) => ({ ...s, location: autofill(geo, { ...s.location, [k]: v }, k) }));
+  const setLoc = (k, v) => setF((s) => {
+    const location = { ...s.location, [k]: v };
+    if (k === 'country' && v !== s.location.country) {
+      location.region = '';
+      location.appellation = '';
+    } else if (k === 'region' && v !== s.location.region) {
+      location.appellation = '';
+    }
+    return { ...s, location: autofill(geo, location, k) };
+  });
   const setGrape = (i, k, v) => setF((s) => ({ ...s, wine: { ...s.wine, grapes: s.wine.grapes.map((g, j) => (j === i ? { ...g, [k]: v } : g)) } }));
   const tot = grapeTotal(f.wine.grapes);
   const uid = React.useId();
