@@ -36,5 +36,6 @@ export const api = {
   },
   setWineQuantity: (id, quantity, confirmClosetRemoval = false) => call('POST', `/bottles/${id}/quantity`, { quantity, confirmClosetRemoval }),
   moveBottle: (id, slot) => call('POST', `/bottles/${id}/move`, { slot }),
-  drinkBottle: (id) => call('POST', `/bottles/${id}/drink`)
+  drinkBottle: (id) => call('POST', `/bottles/${id}/drink`),
+  removeFromBin: (ids) => call('DELETE', '/bin', ids ? { ids } : {})
 };

@@ -11,6 +11,10 @@ import WineMap from './components/WineMap.jsx';
 const keyOf = (slot) => slotKey(String(slot.shelf), slot.d, slot.r, slot.c);
 const newId = () => Math.floor(Date.now() / 1000).toString(16).padStart(8, '0') + Array.from({ length: 16 }, () => ((Math.random() * 16) | 0).toString(16)).join('');
 const euro = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR' });
+const wineSearchText = (bottle) => [bottle.wine?.producer, bottle.wine?.name, bottle.wine?.vintage,
+  COLORS[bottle.wine?.color]?.label, bottle.location?.country, bottle.location?.region,
+  bottle.location?.appellation, bottle.location?.vineyard,
+  ...(bottle.wine?.grapes || []).map((grape) => grape.grape)].filter(Boolean).join(' ').toLowerCase();
 
 function useMedia(q) {
   const [m, setM] = useState(() => window.matchMedia(q).matches);
@@ -37,8 +41,10 @@ export default function App() {
   const [activeId, setActiveId] = useState(() => { try { return localStorage.getItem('botl-closet'); } catch { return null; } });
   const [tab, setTab] = useState('closet'); // phone: closet | bottles | search | layout
   const [webView, setWebView] = useState('closet'); // web: closet | bottles | search | cellar | map
-  const [wineSearch, setWineSearch] = useState({ region: '', grape: '', color: '', producer: '' });
+  const [wineQuery, setWineQuery] = useState('');
   const [binQuery, setBinQuery] = useState('');
+  const [selectedBinIds, setSelectedBinIds] = useState([]);
+  const [binBusy, setBinBusy] = useState(false);
   const [webEdit, setWebEdit] = useState(false);
   const [cabinetScale, setCabinetScale] = useState(100);
   const cabinetFrameRef = useRef(null);
@@ -100,6 +106,25 @@ export default function App() {
 
   const replaceBottles = (list) => setData((d) => ({ ...d, bottles: d.bottles.map((b) => list.find((x) => x._id === b._id) || b) }));
   const fail = (e) => { flash(e.message); load(); };
+  async function removeBinBottles(ids) {
+    const count = ids?.length ?? bin.length;
+    if (!count) return;
+    const prompt = ids?.length
+      ? `Permanently remove ${count} selected bottle${count === 1 ? '' : 's'} from the bin?`
+      : `Permanently remove all ${count} bottles from the bin?`;
+    if (!window.confirm(prompt)) return;
+    setBinBusy(true);
+    try {
+      const result = await api.removeFromBin(ids);
+      setData((current) => ({ ...current, bin: ids ? current.bin.filter((bottle) => !ids.includes(bottle._id)) : [] }));
+      setSelectedBinIds([]);
+      flash(`Removed ${result.deletedCount} bottle${result.deletedCount === 1 ? '' : 's'} from the bin`);
+    } catch (error) {
+      fail(error);
+    } finally {
+      setBinBusy(false);
+    }
+  }
 
   /* moving bottles */
   const move = useCallback(async (id, key) => {
@@ -347,38 +372,28 @@ export default function App() {
       </div>
     );
   };
-  const searchResults = bottles.filter((bottle) => {
-    const matchesText = (value, query) => !query || String(value || '').toLowerCase().includes(query.trim().toLowerCase());
-    return matchesText(bottle.location?.region, wineSearch.region)
-      && (!wineSearch.grape || (bottle.wine?.grapes || []).some((grape) => matchesText(grape.grape, wineSearch.grape)))
-      && (!wineSearch.color || bottle.wine?.color === wineSearch.color)
-      && matchesText(bottle.wine?.producer, wineSearch.producer);
-  });
-  const wineSearchFields = (
-    <div className="wine-search-fields" role="search" aria-label="Search wines">
-      <label className="field">Region<input value={wineSearch.region} onChange={(event) => setWineSearch((current) => ({ ...current, region: event.target.value }))} placeholder="e.g. Rioja" /></label>
-      <label className="field">Grape<input value={wineSearch.grape} onChange={(event) => setWineSearch((current) => ({ ...current, grape: event.target.value }))} placeholder="e.g. Tempranillo" /></label>
-      <label className="field">Color<select value={wineSearch.color} onChange={(event) => setWineSearch((current) => ({ ...current, color: event.target.value }))}>
-        <option value="">All colors</option>
-        {Object.entries(COLORS).map(([key, color]) => <option key={key} value={key}>{color.label}</option>)}
-      </select></label>
-      <label className="field">Producer<input value={wineSearch.producer} onChange={(event) => setWineSearch((current) => ({ ...current, producer: event.target.value }))} placeholder="Producer name" /></label>
-      <button className="btn sm" type="button" onClick={() => setWineSearch({ region: '', grape: '', color: '', producer: '' })}>Clear filters</button>
-    </div>
+  const searchMatches = (source, query) => source.filter((bottle) => wineSearchText(bottle).includes(query.trim().toLowerCase()));
+  const searchResults = searchMatches(bottles, wineQuery);
+  const searchField = (value, onChange, label) => (
+    <label className="field wine-search-input">{label}<input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder="Producer, wine, grape, color, region…" /></label>
   );
-  const binMatches = bin.filter((bottle) => {
-    const searchable = [bottle.wine?.producer, bottle.wine?.name, bottle.wine?.vintage, COLORS[bottle.wine?.color]?.label,
-      bottle.location?.country, bottle.location?.region, bottle.location?.appellation, ...(bottle.wine?.grapes || []).map((grape) => grape.grape)]
-      .filter(Boolean).join(' ').toLowerCase();
-    return searchable.includes(binQuery.trim().toLowerCase());
-  });
+  const binMatches = searchMatches(bin, binQuery);
   const binView = (
     <section className="wine-search-view">
       <h2>Bin · {bin.length}</h2>
-      <label className="field">Search emptied wines<input type="search" value={binQuery} onChange={(event) => setBinQuery(event.target.value)} placeholder="Producer, wine, grape, region…" /></label>
+      {searchField(binQuery, setBinQuery, 'Search emptied wines')}
       <p className="wine-search-count">{binMatches.length} matching {binMatches.length === 1 ? 'bottle' : 'bottles'}</p>
+      <div className="bin-actions">
+        <button className="btn" type="button" disabled={!selectedBinIds.length || binBusy} onClick={() => removeBinBottles(selectedBinIds)}>
+          Remove selected{selectedBinIds.length ? ` · ${selectedBinIds.length}` : ''}
+        </button>
+        <button className="btn danger" type="button" disabled={!bin.length || binBusy} onClick={() => removeBinBottles()}>
+          Empty bin
+        </button>
+      </div>
       {binMatches.length ? <div className="bin-list">{binMatches.map((bottle) => (
         <div className="bin-item" key={bottle._id}>
+          <input type="checkbox" aria-label={`Select ${bLabel(bottle)}`} checked={selectedBinIds.includes(bottle._id)} onChange={(event) => setSelectedBinIds((current) => event.target.checked ? [...current, bottle._id] : current.filter((id) => id !== bottle._id))} />
           <span className="dot" style={{ width: 16, height: 16, background: COLORS[bottle.wine.color]?.v }} />
           <span className="t"><b>{[bottle.wine.producer, bottle.wine.name].filter(Boolean).join(' ')}</b><small>{[bottle.wine.vintage, bottle.location.appellation || bottle.location.region, ...(bottle.wine.grapes || []).map((grape) => grape.grape)].filter(Boolean).join(' · ')}</small></span>
           <span className="pos">{bottle.drunkAt ? new Date(bottle.drunkAt).toLocaleDateString() : 'Emptied'}</span>
@@ -535,7 +550,7 @@ export default function App() {
         <div className="scroll">
           {tab === 'closet' && cabinet}
           {tab === 'bottles' && list()}
-          {tab === 'search' && <section className="wine-search-view"><h2>Find a wine</h2>{wineSearchFields}<p className="wine-search-count">{searchResults.length} matching {searchResults.length === 1 ? 'bottle' : 'bottles'}</p>{list(searchResults, false, 'No wines match these filters.')}</section>}
+          {tab === 'search' && <section className="wine-search-view"><h2>Find a wine</h2>{searchField(wineQuery, setWineQuery, 'Search your wines')}<p className="wine-search-count">{searchResults.length} matching {searchResults.length === 1 ? 'bottle' : 'bottles'}</p>{list(searchResults, false, 'No wines match your search.')}</section>}
           {tab === 'bin' && binView}
           {tab === 'layout' && <>{cabinet}<div style={{ height: 14 }} />{editor}</>}
         </div>
@@ -626,7 +641,7 @@ export default function App() {
           ) : webView === 'search' ? (
             <section className="wine-search-view">
               <h2>Find a wine</h2>
-              {wineSearchFields}
+              {searchField(wineQuery, setWineQuery, 'Search your wines')}
               <p className="wine-search-count">{searchResults.length} matching {searchResults.length === 1 ? 'bottle' : 'bottles'}</p>
               {list(searchResults, false, 'No wines match these filters.')}
             </section>

@@ -97,6 +97,24 @@ test('wine data is cleaned', async () => {
   assert.equal((await call('POST', '/bottles', { wine: {} })).status, 400);
 });
 
+test('bin removes selected consumed bottles and can be emptied without deleting active bottles', async () => {
+  const consumed = await call('POST', '/bottles', { wine, qty: 2 });
+  const active = await call('POST', '/bottles', { wine: { ...wine, name: 'Still active' } });
+  for (const bottle of consumed.body.bottles) await call('POST', `/bottles/${bottle._id}/drink`);
+
+  const selected = await call('DELETE', '/bin', { ids: [active.body.bottles[0]._id, consumed.body.bottles[0]._id] });
+  assert.equal(selected.body.deletedCount, 1);
+  let state = await call('GET', '/state');
+  assert.deepEqual(state.body.bin.map((bottle) => bottle._id), [consumed.body.bottles[1]._id]);
+  assert.ok(state.body.bottles.some((bottle) => bottle._id === active.body.bottles[0]._id));
+
+  const emptied = await call('DELETE', '/bin', {});
+  assert.equal(emptied.body.deletedCount, 1);
+  state = await call('GET', '/state');
+  assert.equal(state.body.bin.length, 0);
+  assert.equal(state.body.bottles.length, 1);
+});
+
 test('editing one bottle updates its wine group without moving its copies', async () => {
   const { body: { closet } } = await call('POST', '/closets', { template: 'blank' });
   const shelf = closet.shelves[0];

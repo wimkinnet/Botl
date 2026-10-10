@@ -282,6 +282,21 @@ router.post('/bottles/:id/drink', ah(async (req, res) => {
   res.json({ bottle });
 }));
 
+router.delete('/bin', ah(async (req, res) => {
+  const hasIds = Object.hasOwn(req.body || {}, 'ids');
+  if (hasIds && (!Array.isArray(req.body.ids) || req.body.ids.some((id) => !isId(id))))
+    throw new HttpError(400, 'Bin bottle ids must be an array of valid ids');
+  const filter = { drunkAt: { $ne: null } };
+  if (hasIds) filter._id = { $in: req.body.ids };
+  const doomed = await Bottle.find(filter, { winePhotoId: 1 });
+  const result = await Bottle.deleteMany(filter);
+  const photoIds = [...new Set(doomed.map((bottle) => String(bottle.winePhotoId || '')).filter(Boolean))];
+  for (const id of photoIds) {
+    if (!await Bottle.exists({ winePhotoId: id })) await WinePhoto.deleteOne({ _id: id });
+  }
+  res.json({ deletedCount: result.deletedCount });
+}));
+
 router.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars
 router.use((err, req, res, next) => {

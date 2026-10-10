@@ -236,15 +236,17 @@ button.shelf-label[aria-pressed="true"]{background:var(--cab-ink);color:var(--ca
 .bitem .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bitem .t small{color:var(--muted)}
 .bin-list{display:flex;flex-direction:column}
-.bin-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.bin-item{display:grid;grid-template-columns:20px auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.bin-item input{width:16px;height:16px;margin:0;accent-color:var(--accent)}
 .bin-item .t{min-width:0}
 .bin-item .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bin-item .t small{color:var(--muted)}
+.bin-actions{display:flex;flex-wrap:wrap;gap:8px}
 .pos{font-family:var(--f-mono);font-size:.78rem;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
 .wine-search-view{display:flex;flex-direction:column;gap:12px;min-width:0}
 .wine-search-view h2{font-size:1.4rem}
-.wine-search-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end;padding:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px}
-.wine-search-fields .btn{justify-self:start}
+.wine-search-input{max-width:680px}
+.wine-search-input input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;font-size:.95rem;min-width:0;width:100%}
 .wine-search-count{margin:0;color:var(--muted);font-size:.82rem}
 
 /* phone specifics */
@@ -318,8 +320,6 @@ button.shelf-label[aria-pressed="true"]{background:var(--cab-ink);color:var(--ca
 @media (max-width:1100px){ .web-body{grid-template-columns:200px minmax(0,1fr)} .web-panel{grid-column:1/-1;border-left:0;border-top:1px solid var(--line);max-height:none} }
 @media (max-width:760px){ .web-body{grid-template-columns:1fr} .web-side{border-right:0;border-bottom:1px solid var(--line)} }
 @media (max-width:760px){.cabinet-size-control{align-self:stretch}.cabinet-size-control input{flex:1;width:auto;max-width:180px}}
-@media (max-width:1100px){.wine-search-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:420px){.wine-search-fields{grid-template-columns:1fr}}
 
 
 /* app shell: the phone layout fills the screen, the web layout uses three columns */
