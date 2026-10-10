@@ -82,11 +82,12 @@ async function reconcile(closet) {
 
 /* everything the app shows, in one call: a personal collection is small */
 router.get('/state', ah(async (req, res) => {
-  const [closets, bottles] = await Promise.all([
+  const [closets, bottles, bin] = await Promise.all([
     Closet.find().sort({ order: 1, createdAt: 1 }),
-    Bottle.find({ drunkAt: null }).sort({ createdAt: 1 })
+    Bottle.find({ drunkAt: null }).sort({ createdAt: 1 }),
+    Bottle.find({ drunkAt: { $ne: null } }).sort({ drunkAt: -1 })
   ]);
-  res.json({ closets, bottles });
+  res.json({ closets, bottles, bin });
 }));
 
 router.get('/reference', (req, res) => {

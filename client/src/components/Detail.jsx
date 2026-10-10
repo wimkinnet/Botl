@@ -38,7 +38,7 @@ export function WineDetails({ b }) {
   );
 }
 
-export function BottleDetail({ b, where, position, quantity, cellarQuantity, onSetQuantity, onMove, onToCellar, onEdit }) {
+export function BottleDetail({ b, where, position, quantity, cellarQuantity, onSetQuantity, onMove, onToCellar, onDrink, onEdit }) {
   const [quantityValue, setQuantityValue] = useState(quantity);
   const [quantityBusy, setQuantityBusy] = useState(false);
   const [closetConfirmation, setClosetConfirmation] = useState(null);
@@ -93,6 +93,7 @@ export function BottleDetail({ b, where, position, quantity, cellarQuantity, onS
       </div>
       <WineDetails b={b} />
       <div className="row-btns">
+        <button className="btn danger" onClick={onDrink}>Drink</button>
         <button className="btn" onClick={onMove}>{b.slot ? 'Move' : 'Put in closet'}</button>
         {b.slot && <button className="btn" onClick={onToCellar}>To cellar</button>}
         <button className="btn ghost" onClick={onEdit}>Edit</button>

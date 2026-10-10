@@ -74,6 +74,9 @@ test('closet from template, bottles, moves, swaps, cellar and reconcile', async 
   const st = await call('GET', '/state');
   assert.equal(st.body.bottles.length, 2);
   assert.ok(st.body.bottles.every((x) => x.slot === null));
+  assert.equal(st.body.bin.length, 1);
+  assert.equal(st.body.bin[0]._id, c3._id);
+  assert.ok(st.body.bin[0].drunkAt);
 
   // deleting a closet keeps its bottles
   await call('POST', `/bottles/${a._id}/move`, { slot: { closet: closet._id, shelf: closet.shelves[0]._id, d: 0, r: 1, c: 2 } });

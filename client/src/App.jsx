@@ -10,6 +10,7 @@ import WineMap from './components/WineMap.jsx';
 
 const keyOf = (slot) => slotKey(String(slot.shelf), slot.d, slot.r, slot.c);
 const newId = () => Math.floor(Date.now() / 1000).toString(16).padStart(8, '0') + Array.from({ length: 16 }, () => ((Math.random() * 16) | 0).toString(16)).join('');
+const euro = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR' });
 
 function useMedia(q) {
   const [m, setM] = useState(() => window.matchMedia(q).matches);
@@ -37,6 +38,7 @@ export default function App() {
   const [tab, setTab] = useState('closet'); // phone: closet | bottles | search | layout
   const [webView, setWebView] = useState('closet'); // web: closet | bottles | search | cellar | map
   const [wineSearch, setWineSearch] = useState({ region: '', grape: '', color: '', producer: '' });
+  const [binQuery, setBinQuery] = useState('');
   const [webEdit, setWebEdit] = useState(false);
   const [cabinetScale, setCabinetScale] = useState(100);
   const cabinetFrameRef = useRef(null);
@@ -71,6 +73,7 @@ export default function App() {
 
   const closets = data?.closets || [];
   const bottles = data?.bottles || [];
+  const bin = data?.bin || [];
   const closet = closets.find((c) => c._id === activeId) || closets[0] || null;
   useEffect(() => {
     if (closet && closet._id !== activeId) setActiveId(closet._id);
@@ -83,6 +86,7 @@ export default function App() {
     return m;
   }, [bottles, closet]);
   const cellar = useMemo(() => bottles.filter((b) => !b.slot), [bottles]);
+  const closetValue = [...bySlot.values()].reduce((total, bottle) => total + (Number(bottle.wine?.price) || 0), 0);
   const closetById = useMemo(() => Object.fromEntries(closets.map((c) => [c._id, c])), [closets]);
   const selectedBottle = sel?.kind === 'bottle' ? bottles.find((b) => b._id === sel.id) : null;
   const sameWineIds = useMemo(() => {
@@ -267,11 +271,20 @@ export default function App() {
           if (!result.bottles.some((item) => item._id === b._id)) setSel(result.bottles.length ? { kind: 'bottle', id: result.bottles[0]._id } : null);
           if (result.added) flash(`Added ${result.added} bottle${result.added === 1 ? '' : 's'} to the global cellar`);
           else if (result.removed) flash(`Removed ${result.removed} bottle${result.removed === 1 ? '' : 's'}${result.closetRemoved ? `, including ${result.closetRemoved} from closets` : ''}`);
+          if (result.removed) await load();
           return result;
         }}
         onEdit={() => setSel({ kind: 'edit', id: b._id })}
         onMove={() => { setMoving(b._id); setSel(null); if (phone) setTab('closet'); }}
         onToCellar={() => move(b._id, null)}
+        onDrink={async () => {
+          try {
+            const result = await api.drinkBottle(b._id);
+            setData((current) => ({ ...current, bottles: current.bottles.filter((item) => item._id !== b._id), bin: [result.bottle, ...(current.bin || [])] }));
+            setSel(null);
+            flash('Bottle moved to the bin');
+          } catch (error) { fail(error); }
+        }}
       />
     );
   }
@@ -352,6 +365,26 @@ export default function App() {
       <label className="field">Producer<input value={wineSearch.producer} onChange={(event) => setWineSearch((current) => ({ ...current, producer: event.target.value }))} placeholder="Producer name" /></label>
       <button className="btn sm" type="button" onClick={() => setWineSearch({ region: '', grape: '', color: '', producer: '' })}>Clear filters</button>
     </div>
+  );
+  const binMatches = bin.filter((bottle) => {
+    const searchable = [bottle.wine?.producer, bottle.wine?.name, bottle.wine?.vintage, COLORS[bottle.wine?.color]?.label,
+      bottle.location?.country, bottle.location?.region, bottle.location?.appellation, ...(bottle.wine?.grapes || []).map((grape) => grape.grape)]
+      .filter(Boolean).join(' ').toLowerCase();
+    return searchable.includes(binQuery.trim().toLowerCase());
+  });
+  const binView = (
+    <section className="wine-search-view">
+      <h2>Bin · {bin.length}</h2>
+      <label className="field">Search emptied wines<input type="search" value={binQuery} onChange={(event) => setBinQuery(event.target.value)} placeholder="Producer, wine, grape, region…" /></label>
+      <p className="wine-search-count">{binMatches.length} matching {binMatches.length === 1 ? 'bottle' : 'bottles'}</p>
+      {binMatches.length ? <div className="bin-list">{binMatches.map((bottle) => (
+        <div className="bin-item" key={bottle._id}>
+          <span className="dot" style={{ width: 16, height: 16, background: COLORS[bottle.wine.color]?.v }} />
+          <span className="t"><b>{[bottle.wine.producer, bottle.wine.name].filter(Boolean).join(' ')}</b><small>{[bottle.wine.vintage, bottle.location.appellation || bottle.location.region, ...(bottle.wine.grapes || []).map((grape) => grape.grape)].filter(Boolean).join(' · ')}</small></span>
+          <span className="pos">{bottle.drunkAt ? new Date(bottle.drunkAt).toLocaleDateString() : 'Emptied'}</span>
+        </div>
+      ))}</div> : <p className="muted">{bin.length ? 'No emptied bottles match your search.' : 'Emptied bottles will appear here.'}</p>}
+    </section>
   );
   const cabinet = closet && (
     <div ref={cabinetFrameRef} className="cabinet-frame" style={{ '--cabinet-scale': `${cabinetScale}%` }}>
@@ -492,21 +525,23 @@ export default function App() {
               {closets.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
             </select>
             <small>{usedHere} bottles · {capHere - usedHere} free slots</small>
+            <small>Total value · {euro.format(closetValue)}</small>
           </div>
           <span className="brand">Botl</span>
         </div>
         {movingBanner}
         {tab === 'closet' && cabinetSizeControl}
-        {tab !== 'layout' && tab !== 'search' && chips}
+        {tab !== 'layout' && tab !== 'search' && tab !== 'bin' && chips}
         <div className="scroll">
           {tab === 'closet' && cabinet}
           {tab === 'bottles' && list()}
           {tab === 'search' && <section className="wine-search-view"><h2>Find a wine</h2>{wineSearchFields}<p className="wine-search-count">{searchResults.length} matching {searchResults.length === 1 ? 'bottle' : 'bottles'}</p>{list(searchResults, false, 'No wines match these filters.')}</section>}
+          {tab === 'bin' && binView}
           {tab === 'layout' && <>{cabinet}<div style={{ height: 14 }} />{editor}</>}
         </div>
-        {tab !== 'bottles' && tab !== 'search' && cellarStrip}
+        {tab !== 'bottles' && tab !== 'search' && tab !== 'bin' && cellarStrip}
         <nav className="tabbar">
-          {[['closet', 'Closet'], ['bottles', 'Bottles'], ['search', 'Find'], ['layout', 'Layout']].map(([k, l]) => (
+          {[['closet', 'Closet'], ['bottles', 'Bottles'], ['search', 'Find'], ['bin', 'Bin'], ['layout', 'Layout']].map(([k, l]) => (
             <button key={k} aria-pressed={tab === k} onClick={() => { setTab(k); setSel(null); }}>
               {ICONS[k]}
               {l}
@@ -546,6 +581,7 @@ export default function App() {
           <div>
             <button className="list-link" aria-pressed={webView === 'bottles'} onClick={() => setWebView('bottles')}><b>All bottles</b> <span className="muted">{bottles.length}</span></button>
             <button className="list-link" aria-pressed={webView === 'search'} onClick={() => setWebView('search')}><b>Find a wine</b></button>
+            <button className="list-link" aria-pressed={webView === 'bin'} onClick={() => setWebView('bin')}><b>Bin</b> <span className="muted">{bin.length}</span></button>
             <button className="list-link" aria-pressed={webView === 'cellar'} onClick={() => { setWebView('cellar'); setSel(null); }}><b>Global cellar</b> <span className="muted">{cellar.length}</span></button>
             <button className="list-link" aria-pressed={webView === 'map'} onClick={() => { setWebView('map'); setSel(null); }}><b>Wine map</b></button>
           </div>
@@ -557,6 +593,9 @@ export default function App() {
           {webView !== 'map' && <div>
             <p className="eyebrow">In this closet</p>
             <div className="stat">{usedHere}<span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}> / {capHere}</span></div>
+            <p className="eyebrow" style={{ marginTop: 12 }}>Total value</p>
+            <div className="stat">{euro.format(closetValue)}</div>
+            <small className="muted">Based on recorded bottle prices</small>
           </div>}
           {webView !== 'map' && <div>
             <p className="eyebrow" style={{ marginBottom: 6 }}>Legend</p>
@@ -582,6 +621,8 @@ export default function App() {
               {chips}
               {list()}
             </>
+          ) : webView === 'bin' ? (
+            binView
           ) : webView === 'search' ? (
             <section className="wine-search-view">
               <h2>Find a wine</h2>
