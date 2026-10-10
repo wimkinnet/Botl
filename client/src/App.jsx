@@ -25,6 +25,7 @@ function useMedia(q) {
 const ICONS = {
   closet: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="5" y="2.5" width="14" height="19" rx="2" /><path d="M5 9h14M5 15h14" /><circle cx="9" cy="12" r="1.3" fill="currentColor" /><circle cx="12.5" cy="12" r="1.3" fill="currentColor" /></svg>,
   bottles: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.5" cy="6" r="1.3" fill="currentColor" /><circle cx="4.5" cy="12" r="1.3" fill="currentColor" /><circle cx="4.5" cy="18" r="1.3" fill="currentColor" /></svg>,
+  search: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></svg>,
   layout: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 10h18M10 10v11" /></svg>
 };
 
@@ -33,8 +34,9 @@ export default function App() {
   const [ref, setRef] = useState({ geo: {}, grapes: [], templates: {} });
   const [loadErr, setLoadErr] = useState('');
   const [activeId, setActiveId] = useState(() => { try { return localStorage.getItem('botl-closet'); } catch { return null; } });
-  const [tab, setTab] = useState('closet'); // phone: closet | bottles | layout
-  const [webView, setWebView] = useState('closet'); // web: closet | bottles | cellar | map
+  const [tab, setTab] = useState('closet'); // phone: closet | bottles | search | layout
+  const [webView, setWebView] = useState('closet'); // web: closet | bottles | search | cellar | map
+  const [wineSearch, setWineSearch] = useState({ region: '', grape: '', color: '', producer: '' });
   const [webEdit, setWebEdit] = useState(false);
   const [cabinetScale, setCabinetScale] = useState(100);
   const cabinetFrameRef = useRef(null);
@@ -308,15 +310,15 @@ export default function App() {
       </div>
     </div>
   );
-  const list = (source = bottles) => {
+  const list = (source = bottles, applyColorFilter = true, emptyMessage = 'No bottles yet.') => {
     const items = source
-      .filter((b) => !filter || b.wine.color === filter)
+      .filter((b) => !applyColorFilter || !filter || b.wine.color === filter)
       .map((b) => {
         const bc = b.slot && closetById[b.slot.closet];
         return { b, pos: bc ? (closets.length > 1 ? bc.name + ' ' : '') + code(bc, b.slot) : 'Cellar' };
       })
       .sort((x, y) => (x.b.wine.producer + x.b.wine.vintage).localeCompare(y.b.wine.producer + y.b.wine.vintage));
-    if (!items.length) return <p className="muted">No bottles yet.</p>;
+    if (!items.length) return <p className="muted">{emptyMessage}</p>;
     return (
       <div className="blist">
         {items.map(({ b, pos }) => (
@@ -332,6 +334,25 @@ export default function App() {
       </div>
     );
   };
+  const searchResults = bottles.filter((bottle) => {
+    const matchesText = (value, query) => !query || String(value || '').toLowerCase().includes(query.trim().toLowerCase());
+    return matchesText(bottle.location?.region, wineSearch.region)
+      && (!wineSearch.grape || (bottle.wine?.grapes || []).some((grape) => matchesText(grape.grape, wineSearch.grape)))
+      && (!wineSearch.color || bottle.wine?.color === wineSearch.color)
+      && matchesText(bottle.wine?.producer, wineSearch.producer);
+  });
+  const wineSearchFields = (
+    <div className="wine-search-fields" role="search" aria-label="Search wines">
+      <label className="field">Region<input value={wineSearch.region} onChange={(event) => setWineSearch((current) => ({ ...current, region: event.target.value }))} placeholder="e.g. Rioja" /></label>
+      <label className="field">Grape<input value={wineSearch.grape} onChange={(event) => setWineSearch((current) => ({ ...current, grape: event.target.value }))} placeholder="e.g. Tempranillo" /></label>
+      <label className="field">Color<select value={wineSearch.color} onChange={(event) => setWineSearch((current) => ({ ...current, color: event.target.value }))}>
+        <option value="">All colors</option>
+        {Object.entries(COLORS).map(([key, color]) => <option key={key} value={key}>{color.label}</option>)}
+      </select></label>
+      <label className="field">Producer<input value={wineSearch.producer} onChange={(event) => setWineSearch((current) => ({ ...current, producer: event.target.value }))} placeholder="Producer name" /></label>
+      <button className="btn sm" type="button" onClick={() => setWineSearch({ region: '', grape: '', color: '', producer: '' })}>Clear filters</button>
+    </div>
+  );
   const cabinet = closet && (
     <div ref={cabinetFrameRef} className="cabinet-frame" style={{ '--cabinet-scale': `${cabinetScale}%` }}>
       <Cabinet
@@ -476,15 +497,16 @@ export default function App() {
         </div>
         {movingBanner}
         {tab === 'closet' && cabinetSizeControl}
-        {tab !== 'layout' && chips}
+        {tab !== 'layout' && tab !== 'search' && chips}
         <div className="scroll">
           {tab === 'closet' && cabinet}
           {tab === 'bottles' && list()}
+          {tab === 'search' && <section className="wine-search-view"><h2>Find a wine</h2>{wineSearchFields}<p className="wine-search-count">{searchResults.length} matching {searchResults.length === 1 ? 'bottle' : 'bottles'}</p>{list(searchResults, false, 'No wines match these filters.')}</section>}
           {tab === 'layout' && <>{cabinet}<div style={{ height: 14 }} />{editor}</>}
         </div>
-        {tab !== 'bottles' && cellarStrip}
+        {tab !== 'bottles' && tab !== 'search' && cellarStrip}
         <nav className="tabbar">
-          {[['closet', 'Closet'], ['bottles', 'Bottles'], ['layout', 'Layout']].map(([k, l]) => (
+          {[['closet', 'Closet'], ['bottles', 'Bottles'], ['search', 'Find'], ['layout', 'Layout']].map(([k, l]) => (
             <button key={k} aria-pressed={tab === k} onClick={() => { setTab(k); setSel(null); }}>
               {ICONS[k]}
               {l}
@@ -523,6 +545,7 @@ export default function App() {
           </div>
           <div>
             <button className="list-link" aria-pressed={webView === 'bottles'} onClick={() => setWebView('bottles')}><b>All bottles</b> <span className="muted">{bottles.length}</span></button>
+            <button className="list-link" aria-pressed={webView === 'search'} onClick={() => setWebView('search')}><b>Find a wine</b></button>
             <button className="list-link" aria-pressed={webView === 'cellar'} onClick={() => { setWebView('cellar'); setSel(null); }}><b>Global cellar</b> <span className="muted">{cellar.length}</span></button>
             <button className="list-link" aria-pressed={webView === 'map'} onClick={() => { setWebView('map'); setSel(null); }}><b>Wine map</b></button>
           </div>
@@ -559,6 +582,13 @@ export default function App() {
               {chips}
               {list()}
             </>
+          ) : webView === 'search' ? (
+            <section className="wine-search-view">
+              <h2>Find a wine</h2>
+              {wineSearchFields}
+              <p className="wine-search-count">{searchResults.length} matching {searchResults.length === 1 ? 'bottle' : 'bottles'}</p>
+              {list(searchResults, false, 'No wines match these filters.')}
+            </section>
           ) : (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
