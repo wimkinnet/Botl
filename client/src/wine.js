@@ -28,18 +28,16 @@ export function formFrom(b) {
 
 // Location suggestions narrow each other: a country limits the regions, a region limits the appellations.
 export function regionsFor(geo, country) {
-  return geo[country] ? Object.keys(geo[country]) : [].concat(...Object.values(geo).map(Object.keys));
+  const countryKey = Object.keys(geo).find((key) => key.trim().toLowerCase() === country?.trim().toLowerCase());
+  if (countryKey) return Object.keys(geo[countryKey]);
+  return country?.trim() ? [] : [...new Set(Object.values(geo).flatMap(Object.keys))];
 }
 export function appsFor(geo, country, region) {
-  if (geo[country]?.[region]) return geo[country][region];
-  const all = [];
-  Object.entries(geo).forEach(([c, rs]) => {
-    if (geo[country] && c !== country) return;
-    Object.entries(rs).forEach(([r, as]) => {
-      if (!region || r === region || !rs[region]) all.push(...as);
-    });
-  });
-  return all;
+  const countryKey = Object.keys(geo).find((key) => key.trim().toLowerCase() === country?.trim().toLowerCase());
+  if (country?.trim() && !countryKey) return [];
+  const countries = countryKey ? [[countryKey, geo[countryKey]]] : Object.entries(geo);
+  if (region?.trim()) return countries.flatMap(([, regions]) => regions[region] || []);
+  return countries.flatMap(([, regions]) => Object.values(regions).flat());
 }
 // Picking an appellation fills in region and country when they are empty, a region fills in its country.
 export function autofill(geo, loc, field) {
