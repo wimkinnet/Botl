@@ -270,10 +270,13 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
   const loc = (k, label, ph, list) => (
     <label className="field wide">
       {label}
-      <input value={f.location[k] ?? ''} placeholder={ph} list={list && uid + list} autoComplete="off" onChange={(e) => setLoc(k, e.target.value)} />
+      <input value={f.location[k] ?? ''} placeholder={ph} list={list && locationListId(list)} autoComplete="off" onChange={(e) => setLoc(k, e.target.value)} />
     </label>
   );
   const opts = (arr) => arr.map((v) => <option key={v} value={v} />);
+  const regionListId = `${uid}region-${encodeURIComponent(f.location.country ?? '')}`;
+  const appListId = `${uid}app-${encodeURIComponent(f.location.country ?? '')}-${encodeURIComponent(f.location.region ?? '')}`;
+  const locationListId = (list) => list === 'region' ? regionListId : list === 'app' ? appListId : uid + list;
 
   return (
     <form className="panel" onSubmit={submit}>
@@ -357,8 +360,8 @@ export function WineForm({ title, heading, initial, geo, grapes, showQty, allowP
       </fieldset>
       <datalist id={uid + 'grapes'}>{opts(grapes)}</datalist>
       <datalist id={uid + 'country'}>{opts(Object.keys(geo))}</datalist>
-      <datalist id={uid + 'region'}>{opts(regionsFor(geo, f.location.country))}</datalist>
-      <datalist id={uid + 'app'}>{opts(appsFor(geo, f.location.country, f.location.region))}</datalist>
+      <datalist key={regionListId} id={regionListId}>{opts(regionsFor(geo, f.location.country))}</datalist>
+      <datalist key={appListId} id={appListId}>{opts(appsFor(geo, f.location.country, f.location.region))}</datalist>
       {showQty && (
         <div className="field">
           Number of bottles
