@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { geoCentroid, geoNaturalEarth1, geoPath } from 'd3-geo';
+import { geoArea, geoCentroid, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import world from 'world-atlas/countries-110m.json';
 import { COLORS, bLabel } from '../wine.js';
@@ -7,7 +7,7 @@ import { COLORS, bLabel } from '../wine.js';
 const width = 960;
 const height = 500;
 const clusterDistance = 25;
-const tidy = (value = '') => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const tidy = (value = '') => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\u2019]/g, '').toLowerCase().trim();
 const wineKey = (bottle) => {
   const identity = [bottle.wine?.producer, bottle.wine?.name, bottle.wine?.vintage, bottle.wine?.color]
     .map((value) => tidy(String(value || ''))).join('|');
@@ -36,7 +36,30 @@ const regionPoints = {
   'new zealand|central otago': [169.2, -45.1], 'new zealand|hawkes bay': [176.8, -39.6],
   'united states|california': [-120.2, 38.0], 'united states|oregon': [-123.0, 44.0],
   'australia|south australia': [139.0, -34.0], 'argentina|mendoza': [-69.2, -33.0],
-  'south africa|western cape': [19.0, -33.5]
+  'south africa|western cape': [19.0, -33.5],
+  'france|beaujolais': [4.6, 46.1], 'france|corsica': [9.0, 42.2], 'france|jura': [5.7, 46.8],
+  'france|languedoc': [3.3, 43.4], 'france|roussillon': [2.8, 42.6], 'france|savoie': [6.0, 45.6]
+};
+// Matches picker regions like "Rhône Valley" or "La Rioja" against shorter anchor names.
+const findRegionPoint = (country, ...names) => {
+  for (const name of names.filter(Boolean)) {
+    if (regionPoints[`${country}|${name}`]) return regionPoints[`${country}|${name}`];
+  }
+  for (const name of names.filter(Boolean)) {
+    const match = Object.entries(regionPoints).find(([key]) => {
+      const [anchorCountry, anchorRegion] = key.split('|');
+      return anchorCountry === country && name.includes(anchorRegion);
+    });
+    if (match) return match[1];
+  }
+  return null;
+};
+// Overseas territories (e.g. French Guiana) skew a country's centroid, so use its largest landmass.
+const mainlandCentroid = (country) => {
+  if (country.geometry?.type !== 'MultiPolygon') return geoCentroid(country);
+  const polygons = country.geometry.coordinates.map((coordinates) => ({ type: 'Polygon', coordinates }));
+  const largest = polygons.reduce((best, polygon) => (geoArea(polygon) > geoArea(best) ? polygon : best));
+  return geoCentroid(largest);
 };
 
 export default function WineMap({ bottles, onSelect }) {
@@ -48,7 +71,7 @@ export default function WineMap({ bottles, onSelect }) {
   const countries = useMemo(() => feature(world, world.objects.countries).features, []);
   const projection = useMemo(() => geoNaturalEarth1().fitExtent([[12, 12], [width - 12, height - 12]], { type: 'Sphere' }), []);
   const path = useMemo(() => geoPath(projection), [projection]);
-  const countryCentroids = useMemo(() => new Map(countries.map((country) => [canonicalCountry(country.properties.name), geoCentroid(country)])), [countries]);
+  const countryCentroids = useMemo(() => new Map(countries.map((country) => [canonicalCountry(country.properties.name), mainlandCentroid(country)])), [countries]);
 
   const { wines, points, unplaced, countryCounts } = useMemo(() => {
     const countryCounts = new Map();
@@ -66,7 +89,7 @@ export default function WineMap({ bottles, onSelect }) {
       const country = canonicalCountry(location.country);
       const region = tidy(location.region);
       const appellation = tidy(location.appellation);
-      const regionAnchor = regionPoints[`${country}|${region}`] || regionPoints[`${country}|${appellation}`];
+      const regionAnchor = findRegionPoint(country, region, appellation);
       const centroid = countryCentroids.get(country);
       const coordinates = regionAnchor || centroid;
       if (!coordinates) {
